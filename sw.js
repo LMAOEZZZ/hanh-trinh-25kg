@@ -1,7 +1,7 @@
 /* Service worker của Hành Trình -25kg.
    Mỗi lần sửa bất kỳ file nào của app: tăng VERSION (v1 → v2 …) để máy người dùng nhận bản mới.
    Service worker chỉ giữ file của app trong bộ nhớ đệm, KHÔNG đụng tới dữ liệu (localStorage, IndexedDB). */
-const VERSION = 'v6';
+const VERSION = 'v7';
 const PREFIX = 'hanh-trinh-25kg-';
 const CACHE = PREFIX + VERSION;
 const ASSETS = [
@@ -28,12 +28,11 @@ const ASSETS = [
   './fonts/baloo-2-vietnamese-600-normal.woff2',
   './fonts/baloo-2-vietnamese-700-normal.woff2',
   './fonts/baloo-2-vietnamese-800-normal.woff2',
-  './icons/favicon.svg',
-  './icons/favicon-32.png',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/favicon-v7-32.png',
+  './icons/icon-v7-192.png',
+  './icons/icon-v7-512.png',
+  './icons/icon-v7-maskable-512.png',
+  './icons/apple-touch-icon-v7-180.png'
 ];
 
 self.addEventListener('install', e => {

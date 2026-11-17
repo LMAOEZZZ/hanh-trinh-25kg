@@ -36,6 +36,11 @@ Lưu ý: trên iPhone, app ngoài màn hình chính và Safari giữ dữ liệu
 1. Mở địa chỉ trên bằng Chrome.
 2. Bấm menu ba chấm → **Cài đặt ứng dụng** (máy cũ ghi **Thêm vào màn hình chính**). Trong app cũng có nút **Cài app** ở Cài đặt.
 
+## Lên bản 7
+
+- Icon app (biểu tượng ngoài màn hình chính, favicon) đổi sang hình một pet trong game.
+- iPhone giữ icon cũ tới khi xóa app khỏi màn hình chính rồi thêm lại (dữ liệu của app ngoài màn hình chính đi theo app đó, nên **sao lưu trước** khi xóa). Android tự đổi icon sau khi app nhận bản 7, có khi mất một hai ngày.
+
 ## Lên bản 6
 
 - Pet Sử thi **chưa có** giờ chỉ hiện **bóng đen** có viền sáng, tên là **???** ở mọi chỗ (thẻ "Hôm nay nổi bật", ô Sử thi trên vòng quay, bộ Sử thi, bộ sưu tập, thẻ quay ở màn Hôm nay). Vẫn thấy hệ (Lửa, Băng…) và nhãn Sử thi để đoán. Quay trúng thì màn lộ diện hiện bóng giữa cột sáng, lóe sáng xong mới ra hình màu và tên. Con đã có hiện bình thường ở mọi nơi.
@@ -112,6 +117,6 @@ Cho người sửa code: sửa file nào cũng phải tăng `VERSION` trong `sw.
 - `js/gacha.js`: vòng quay Sử thi (luật quay, bảo hiểm, màn quay, hiệu ứng ra Sử thi).
 - `js/app.js`: logic và màn hình (kể cả ổ trứng và màn nở trứng). `js/pwa.js`: cập nhật bản mới, cài app.
 - `fonts/`: font Baloo 2 (giấy phép SIL OFL, xem `fonts/OFL.txt`), không gọi Google Fonts.
-- `icons/`: `icon.svg` là bản vẽ gốc của icon.
+- `icons/`: `icon-v7.svg` là bản vẽ gốc của icon (vẽ bằng hàm vẽ pet của app); các file PNG xuất từ đó.
 
 Mọi đường dẫn đều tương đối nên app chạy được ở bất kỳ thư mục con nào: GitHub Pages, Netlify hay máy chủ tĩnh khác.
