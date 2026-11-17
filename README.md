@@ -4,10 +4,10 @@ App theo dõi 84 ngày giảm 25 kg: chốt ngày, nuôi pet, ghi cân. Cài ra 
 
 Địa chỉ: **https://lmaoezzz.github.io/hanh-trinh-25kg/**
 
-## Có gì trong bản 2
+## Có gì trong app
 
 - **28 pet, 7 hệ** (Lửa, Băng, Sấm, Đá, Rừng, Bóng đêm, Thép), mỗi hệ 4 con. Cứ chốt đủ 3 ngày (không cần liên tục) là mở thêm một con: ngày 1, 4, 7… tới ngày 82. Con đầu nở từ trứng, con cuối là Phượng Hoàng huyền thoại.
-- **4 dạng tiến hóa** cho mỗi con: Non → Chiến binh → Đấu sĩ → Tối thượng. Cho ăn đủ thịt thì bấm Tiến hóa. Pet mở càng muộn thì giá tiến hóa càng rẻ, nên con mở ngày 82 vẫn kịp lên dạng 4.
+- **4 dạng tiến hóa** cho mỗi con: Non → Chiến binh → Đấu sĩ → Tối thượng, mỗi dạng một dáng riêng (bé con dễ thương → lớn dần → dạng thần). Cho ăn đủ thịt thì bấm Tiến hóa. Pet mở càng muộn thì giá tiến hóa càng rẻ, nên con mở ngày 82 vẫn kịp lên dạng 4.
 - **Cảnh nền riêng** cho từng con (núi lửa, biển băng, rừng nấm, phố neon…) và **trại chung** cho cả đội.
 - **Cửa hàng**: trang phục (mũ, kính, khăn, áo choàng, giáp, đai, vương miện), hiệu ứng (hào quang, tia sét, lửa bao quanh, sao lấp lánh, vệt sáng) và đồ trang trí trại. Mua một lần, mặc cho pet nào cũng được.
 - **Thịt và xu**: mỗi mục tích trong ngày +1 thịt +3 xu (ngày chưa chốt vẫn có), chốt ngày +4 thịt +10 xu, thêm thưởng mốc chuỗi, thưởng quay lại sau khi đứt chuỗi và thưởng thành tựu. Bỏ lỡ ngày không bị trừ gì, pet không bao giờ chết.
@@ -31,6 +31,10 @@ Lưu ý: trên iPhone, app ngoài màn hình chính và Safari giữ dữ liệu
 
 1. Mở địa chỉ trên bằng Chrome.
 2. Bấm menu ba chấm → **Cài đặt ứng dụng** (máy cũ ghi **Thêm vào màn hình chính**). Trong app cũng có nút **Cài app** ở Cài đặt.
+
+## Lên bản 3
+
+Bản 3 vẽ lại cả 28 pet: 4 dạng tiến hóa của mỗi con giờ khác hẳn nhau về dáng, trang phục và hào quang bám theo đầu thật của từng dạng. Dữ liệu bản 2 giữ nguyên (pet, dạng, thịt, xu, đồ đã mua, đồ đang mặc). Khi thanh **Có bản mới, chạm để cập nhật** hiện ra, chạm vào là xong.
 
 ## Lên bản 2 từ bản 1
 

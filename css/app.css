@@ -552,4 +552,4 @@ body{touch-action:manipulation}
 @keyframes streak{from{stroke-dashoffset:60}to{stroke-dashoffset:-60}}
 
 
-@media (prefers-reduced-motion: reduce){ .pb,.ph,.pt,.bob,.spin,.spin-slow,.twinkle,.ember,.float,.aurora,.snow,.blizzard,.streak{animation:none!important} }
+@media (prefers-reduced-motion: reduce){ .pb,.ph,.pt,.bob,.spin,.spin-slow,.twinkle,.ember,.float,.aurora,.snow,.blizzard,.streak,.sway,.flick,.smoke,.flame,.flow path{animation:none!important} }

@@ -40,11 +40,13 @@ const WEAR_SLOT = { head: [0, 70], eyes: [0, 63], neck: [0, 60], back: [0, 80], 
 const FX_ART = {
   sparkle: (g) => ({ f: `<g class="fx-sparkle">` + [[24, g.hy - 30, 9], [178, g.hy - 6, 7], [170, 160, 8], [28, 150, 6], [140, g.hy - 52, 6], [60, g.hy - 50, 5]].map(([x, y, r], i) => spark4(x, y, r, i % 2 ? '#fff6b0' : '#ffffff', 2, 'twinkle', i * .3)).join('') + `</g>` }),
   trail: (g) => ({ b: `<g class="fx-trail">` + [[-1, 60], [-1, 110], [1, 84], [1, 140], [-1, 160]].map(([sd, y], i) => { const x0 = sd < 0 ? 4 : 196, L = 40 + (i % 3) * 14; return `<path d="M${x0},${y} h${-sd * L}" stroke="${OL}" stroke-width="9" stroke-linecap="round" opacity=".6"/><path class="streak" style="animation-delay:-${i * .25}s" d="M${x0},${y} h${-sd * L}" stroke="${i % 2 ? '#33e1ff' : '#ffffff'}" stroke-width="4.5" stroke-linecap="round"/>`; }).join('') + `</g>` }),
+  // g.halo = [x, y, rx] do petInner tính theo đầu thật (haloAt); không có thì theo RIG như cũ (x = 100).
+  // Quầng sáng nền vẫn giữ chỗ cũ, sau thân pet.
   halo: (g) => {
-    const cy = g.hy - g.hry - 8;
+    const [x, cy, rx] = g.halo || [100, g.hy - g.hry - 8, g.hrx * .7], ry = rx * .18 / .7;
     return {
       b: `<circle cx="100" cy="${f1(g.hy + 30)}" r="92" fill="url(#gGlow)" opacity=".5"/>`,
-      f: `<g class="float">` + `<ellipse cx="100" cy="${f1(cy)}" rx="${f1(g.hrx * .7)}" ry="${f1(g.hrx * .18)}" fill="none" stroke="${OL}" stroke-width="10"/><ellipse cx="100" cy="${f1(cy)}" rx="${f1(g.hrx * .7)}" ry="${f1(g.hrx * .18)}" fill="none" stroke="#ffe14d" stroke-width="5"/><ellipse cx="${f1(100 - g.hrx * .3)}" cy="${f1(cy - g.hrx * .12)}" rx="6" ry="1.6" fill="#fff"/>` + `</g>`
+      f: `<g class="float">` + `<ellipse cx="${f1(x)}" cy="${f1(cy)}" rx="${f1(rx)}" ry="${f1(ry)}" fill="none" stroke="${OL}" stroke-width="10"/><ellipse cx="${f1(x)}" cy="${f1(cy)}" rx="${f1(rx)}" ry="${f1(ry)}" fill="none" stroke="#ffe14d" stroke-width="5"/><ellipse cx="${f1(x - rx * .3 / .7)}" cy="${f1(cy - rx * .12 / .7)}" rx="6" ry="1.6" fill="#fff"/>` + `</g>`
     };
   },
   lightning: (g) => ({ f: `<g class="fx-bolt">` + [[14, 70, 30, '#ffd21f'], [168, 100, 26, '#33e1ff'], [158, 30, 22, '#ffd21f'], [22, 150, 22, '#33e1ff']].map(([x, y, h, c], i) => `<g class="flick" style="animation-delay:-${i * .37}s">${bolt(x, y, h, c, 3)}</g>`).join('') + `</g>` }),
