@@ -1,0 +1,69 @@
+/* ===================== TRANG PHỤC & HIỆU ỨNG: vẽ theo điểm neo của từng pet ===================== */
+// Mỗi món vẽ trong khung riêng (gốc tại điểm neo, chuẩn bề ngang W0) rồi co giãn theo bề ngang thật.
+const WEAR_ART = {
+  /* ---- Mũ: gốc = đỉnh đầu, chuẩn rộng 70 ---- */
+  bandana: () => pa('M-37,14 Q0,2 37,14 L36,26 Q0,15 -36,26 Z', cel('#ff3b4f', '#b81d3a'), 4) + ln('M-30,17 Q0,8 30,17', '#fff', 2, 'opacity=".5"') +
+    pa('M34,18 L52,10 L50,24 Z M34,22 L50,34 L40,36 Z', cel('#ff3b4f', '#b81d3a'), 3.5) + ci(35, 20, 5, '#ff3b4f', 3),
+  cap: () => pa('M-35,20 Q-36,-12 0,-14 Q36,-12 35,20 Q0,14 -35,20 Z', cel('#2b6cff', '#163f9e'), 4.5) +
+    pa('M-38,20 Q0,10 38,20 Q42,28 30,30 Q0,22 -30,30 Q-42,28 -38,20 Z', cel('#2457d6', '#12307a'), 4) + ln('M0,-13 V16', '#12307a', 2.5) +
+    ci(0, -14, 4, '#ffd21f', 2.5) + pa(starPath(-14, 4, 7, 3), '#ffd21f', 2) + hl(-18, -4, 7, 3, -25, .5),
+  beanie: () => pa('M-36,18 Q-38,-16 0,-18 Q38,-16 36,18 Z', cel('#ff8a1f', '#c2560a'), 4.5) + ln('M-20,-12 V14 M-7,-17 V14 M7,-17 V14 M20,-12 V14', '#c2560a', 2.5) +
+    pa('M-40,10 Q0,2 40,10 L39,24 Q0,16 -39,24 Z', cel('#ffd21f', '#d99500'), 4) + ci(0, -22, 9, '#fff6d8', 3.5) + hl(-20, -8, 6, 3, -30, .45),
+  helmet: () => pa('M-30,4 Q-46,-6 -50,-34 Q-36,-18 -24,-14 Z', 'url(#gHorn)', 4) + pa('M30,4 Q46,-6 50,-34 Q36,-18 24,-14 Z', 'url(#gHorn)', 4) +
+    pa('M-37,22 Q-38,-18 0,-20 Q38,-18 37,22 Q0,16 -37,22 Z', cel('#c9d4e6', '#6c81a3'), 4.5) + pa('M-39,16 Q0,8 39,16 L38,26 Q0,18 -38,26 Z', cel('#ffd21f', '#d99500'), 3.5) +
+    pa('M-4,-19 L4,-19 L4,14 L-4,14 Z', cel('#ffd21f', '#d99500'), 3) + [-26, -12, 12, 26].map(x => rivet(x, 20 - Math.abs(x) * .05, 2.2)).join('') + hl(-18, -6, 8, 3.5, -30, .6),
+  crown: () => pa('M-30,14 L-34,-16 L-16,-2 L0,-26 L16,-2 L34,-16 L30,14 Q0,20 -30,14 Z', 'url(#gGold)', 4.5) + ln('M-28,6 Q0,11 28,6', '#e08a00', 3) +
+    ci(0, 2, 5, '#ff3b4f', 2.5) + ci(-17, 4, 3.4, '#33e1ff', 2) + ci(17, 4, 3.4, '#33e1ff', 2) + ci(0, -26, 3.5, '#fff6b0', 2) + ci(-34, -16, 3.5, '#fff6b0', 2) + ci(34, -16, 3.5, '#fff6b0', 2) + hl(-16, -4, 5, 2, -30, .7),
+  /* ---- Kính: gốc = giữa hai mắt, chuẩn rộng 63 ---- */
+  shades: () => ln('M-36,-4 Q0,-10 36,-4', OL, 5) + pa('M-34,-6 L-6,-6 Q-4,10 -18,12 Q-34,12 -34,-6 Z', '#1d1440', 4) + pa('M34,-6 L6,-6 Q4,10 18,12 Q34,12 34,-6 Z', '#1d1440', 4) +
+    ln('M-28,-2 L-20,6 M8,-2 L14,4', '#fff', 2.5, 'opacity=".75"') + ln('M-6,-4 Q0,-7 6,-4', OL, 4),
+  visor: () => pa('M-40,-8 Q0,-14 40,-8 L38,8 Q0,4 -38,8 Z', 'url(#gNeon)', 4.5) + ln('M-32,-5 Q0,-10 30,-5', '#fff', 3, 'opacity=".75"') + ci(-41, 0, 4, '#56698c', 2.5) + ci(41, 0, 4, '#56698c', 2.5),
+  /* ---- Cổ: gốc = cổ, chuẩn rộng 60 ---- */
+  scarf: () => pa('M18,6 L30,34 L22,38 L10,10 Z', cel('#ff3b4f', '#b81d3a'), 3.5) + pa('M-31,-6 Q0,6 31,-6 L31,6 Q0,18 -31,6 Z', cel('#ff3b4f', '#b81d3a'), 4) +
+    ln('M-25,-1 Q0,9 25,-1', '#fff', 2.5, 'opacity=".5"') + ln('M20,24 l7,-3 M17,17 l7,-3', '#fff', 2, 'opacity=".5"'),
+  chain: () => { let s = ''; for (let i = 0; i <= 10; i++) { const t = i / 10, x = -26 + t * 52, y = -2 + Math.sin(t * Math.PI) * 18; s += el(x, y, 4.2, 3, 'url(#gGold)', 2.2, `transform="rotate(${f1((t - .5) * 70)} ${f1(x)} ${f1(y)})"`); } return s + ci(0, 24, 9, 'url(#gGold)', 3.5) + `<text x="0" y="28" text-anchor="middle" font-family="'Baloo 2',sans-serif" font-weight="800" font-size="10" fill="${OL}">-25</text>`; },
+  medal: () => pa('M-12,-4 L0,16 L12,-4 L5,-4 L0,6 L-5,-4 Z', '#2b6cff', 3) + ci(0, 24, 10, 'url(#gGold)', 3.5) + pa(starPath(0, 24.5, 6.5, 2.8), '#fff6b0', 1.6),
+  /* ---- Lưng: gốc = giữa vai, chuẩn rộng 80, cao 72 ---- */
+  cape: () => pa('M-38,0 Q0,-8 38,0 Q50,40 58,78 Q30,70 0,80 Q-30,70 -58,78 Q-50,40 -38,0 Z', cel('#ff3b4f', '#a8163a'), 5) + ln('M-30,20 Q-40,50 -44,72 M30,20 Q40,50 44,72', '#a8163a', 3),
+  royal: () => pa('M-40,0 Q0,-8 40,0 Q54,40 62,80 Q30,72 0,82 Q-30,72 -62,80 Q-54,40 -40,0 Z', cel('#7a3cff', '#4a1fa8'), 5) + ln('M-60,78 Q-30,70 0,80 Q30,70 60,78', '#ffd21f', 4) +
+    pa('M-42,-4 Q0,-12 42,-4 L40,8 Q0,2 -40,8 Z', '#ffffff', 3.5) + [-28, -10, 8, 26].map(x => el(x, 3, 1.8, 3, OL, 0)).join(''),
+  /* ---- Thân: gốc = giữa ngực, chuẩn rộng 60, cao 72 ---- */
+  armor: () => pa('M-27,-26 Q0,-32 27,-26 L24,6 Q0,22 -24,6 Z', cel('#c9d4e6', '#6c81a3'), 4.5) + ln('M0,-28 V14', '#6c81a3', 2.5) + ln('M-22,-20 Q0,-25 22,-20', '#ffd21f', 3) +
+    rivet(-17, -14, 2.4) + rivet(17, -14, 2.4) + pa(starPath(0, -6, 8, 3.4), '#ffd21f', 2.2) + hl(-14, -20, 6, 2.5, -20, .6),
+  belt: () => pa('M-31,22 Q0,28 31,22 L31,34 Q0,40 -31,34 Z', cel('#2a1f63', '#140a30'), 3.5) + pa('M-15,18 Q0,15 15,18 L17,34 Q0,42 -17,34 Z', 'url(#gGold)', 4) +
+    ci(0, 27, 6, '#ff3b4f', 2.5) + ci(-10, 27, 2.4, '#33e1ff', 1.6) + ci(10, 27, 2.4, '#33e1ff', 1.6) + hl(-8, 21, 4, 1.5, -10, .7)
+};
+// Điểm neo y của từng ô và chuẩn bề ngang
+const WEAR_SLOT = { head: [0, 70], eyes: [0, 63], neck: [0, 60], back: [0, 80], body: [0, 60] };
+
+/* ---- Hiệu ứng: b = sau lưng pet, f = trước pet ---- */
+const FX_ART = {
+  sparkle: (g) => ({ f: `<g class="fx-sparkle">` + [[24, g.hy - 30, 9], [178, g.hy - 6, 7], [170, 160, 8], [28, 150, 6], [140, g.hy - 52, 6], [60, g.hy - 50, 5]].map(([x, y, r], i) => spark4(x, y, r, i % 2 ? '#fff6b0' : '#ffffff', 2, 'twinkle', i * .3)).join('') + `</g>` }),
+  trail: (g) => ({ b: `<g class="fx-trail">` + [[-1, 60], [-1, 110], [1, 84], [1, 140], [-1, 160]].map(([sd, y], i) => { const x0 = sd < 0 ? 4 : 196, L = 40 + (i % 3) * 14; return `<path d="M${x0},${y} h${-sd * L}" stroke="${OL}" stroke-width="9" stroke-linecap="round" opacity=".6"/><path class="streak" style="animation-delay:-${i * .25}s" d="M${x0},${y} h${-sd * L}" stroke="${i % 2 ? '#33e1ff' : '#ffffff'}" stroke-width="4.5" stroke-linecap="round"/>`; }).join('') + `</g>` }),
+  halo: (g) => {
+    const cy = g.hy - g.hry - 8;
+    return {
+      b: `<circle cx="100" cy="${f1(g.hy + 30)}" r="92" fill="url(#gGlow)" opacity=".5"/>`,
+      f: `<g class="float">` + `<ellipse cx="100" cy="${f1(cy)}" rx="${f1(g.hrx * .7)}" ry="${f1(g.hrx * .18)}" fill="none" stroke="${OL}" stroke-width="10"/><ellipse cx="100" cy="${f1(cy)}" rx="${f1(g.hrx * .7)}" ry="${f1(g.hrx * .18)}" fill="none" stroke="#ffe14d" stroke-width="5"/><ellipse cx="${f1(100 - g.hrx * .3)}" cy="${f1(cy - g.hrx * .12)}" rx="6" ry="1.6" fill="#fff"/>` + `</g>`
+    };
+  },
+  lightning: (g) => ({ f: `<g class="fx-bolt">` + [[14, 70, 30, '#ffd21f'], [168, 100, 26, '#33e1ff'], [158, 30, 22, '#ffd21f'], [22, 150, 22, '#33e1ff']].map(([x, y, h, c], i) => `<g class="flick" style="animation-delay:-${i * .37}s">${bolt(x, y, h, c, 3)}</g>`).join('') + `</g>` }),
+  fireRing: (g) => {
+    let s = '';
+    for (let i = 0; i < 9; i++) { const x = 18 + i * 20.5, y = GROUND + 2 - Math.sin(i / 8 * Math.PI) * 6; s += flame(x, y, 22 + (i % 2) * 10, 16, (i % 3 - 1) * 3, true, 3.5); }
+    return { b: `<g class="flame-row">${s}</g>`, f: '' };
+  }
+};
+
+function wearSVG(slot, item, anc, g, petId) {
+  if (!item) return '';
+  if (slot === 'fxb' || slot === 'fxf') {
+    const fn = FX_ART[item]; if (!fn) return '';
+    const r = fn(g); return (slot === 'fxb' ? r.b : r.f) || '';
+  }
+  const fn = WEAR_ART[item], a = anc[slot]; if (!fn || !a) return '';
+  const k = a[2] / WEAR_SLOT[slot][1];
+  if (slot === 'back') { const ky = a[3] / 72; return `<g transform="translate(${f1(a[0])} ${f1(a[1])}) scale(${f1(k * 1000) / 1000} ${f1(ky * 1000) / 1000})">${fn()}</g>`; }
+  if (slot === 'body') { return `<g transform="translate(${f1(a[0])} ${f1(a[1])}) scale(${f1(k * 1000) / 1000} ${f1(a[3] / 72 * 1000) / 1000})">${fn()}</g>`; }
+  return `<g transform="translate(${f1(a[0])} ${f1(a[1])}) scale(${f1(k * 1000) / 1000})">${fn()}</g>`;
+}

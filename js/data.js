@@ -3,89 +3,172 @@ const PLAN_DAYS = 84;
 const WD_NAME = ['CN','T2','T3','T4','T5','T6','T7'];
 const WD_FULL = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
 
-// Buổi tạ theo thứ (1=T2 ... 6=T7). Bài bụng ở cuối buổi Legs trong doc đã chuyển sang lịch bụng riêng.
-const SESSIONS = {
-  1:{code:'Push A',tag:'nặng',ex:[
-    {n:'Bench press',s:4,r:'4–6',rest:'2–3 phút',main:1},
-    {n:'Overhead press đứng',s:4,r:'5–7',rest:'2–3 phút',main:1},
-    {n:'Dips đeo tạ',s:3,r:'6–8',rest:'90 giây'},
-    {n:'Siêu set: Lateral raise + Triceps pushdown',s:3,r:'12–15 + 10–12',rest:'45–60 giây'}]},
-  2:{code:'Pull A',tag:'nặng',ex:[
-    {n:'Pull-up đeo tạ',s:4,r:'5–7',rest:'2–3 phút',main:1},
-    {n:'Barbell row',s:4,r:'6–8',rest:'2–3 phút',main:1},
-    {n:'Siêu set: Seated cable row + Face pull',s:3,r:'8–10 + 12–15',rest:'45–60 giây'},
-    {n:'EZ bar curl',s:3,r:'6–8',rest:'90 giây'}]},
-  3:{code:'Legs A',tag:'nặng',ex:[
-    {n:'Back squat',s:4,r:'4–6',rest:'3 phút',main:1},
-    {n:'Romanian deadlift',s:4,r:'6–8',rest:'2–3 phút',main:1},
-    {n:'Leg press',s:3,r:'8–10',rest:'2 phút'},
-    {n:'Siêu set: Lying leg curl + Standing calf raise',s:3,r:'8–10 + 8–10',rest:'45–60 giây'}]},
-  4:{code:'Push B',tag:'vừa',ex:[
-    {n:'Incline dumbbell press',s:4,r:'8–10',rest:'2 phút',main:1},
-    {n:'Seated dumbbell shoulder press',s:3,r:'8–10',rest:'90 giây',main:1},
-    {n:'Siêu set: Machine chest press + Cable fly',s:3,r:'10–12 + 12–15',rest:'45–60 giây'},
-    {n:'Siêu set: Cable lateral raise + Overhead triceps extension',s:3,r:'12–15 + 10–12',rest:'45–60 giây'}]},
-  5:{code:'Pull B',tag:'vừa',ex:[
-    {n:'Lat pulldown',s:4,r:'8–10',rest:'2 phút',main:1},
-    {n:'One-arm dumbbell row',s:3,r:'8–12',rest:'90 giây',main:1},
-    {n:'Siêu set: Straight-arm pulldown + Rear delt fly',s:3,r:'12–15 + 12–15',rest:'45–60 giây'},
-    {n:'Siêu set: Incline dumbbell curl + Hammer curl',s:2,r:'10–12 + 10–12',rest:'45–60 giây'}]},
-  6:{code:'Legs B',tag:'vừa',ex:[
-    {n:'Hack squat hoặc front squat',s:4,r:'6–8',rest:'2–3 phút',main:1},
-    {n:'Bulgarian split squat (mỗi chân)',s:3,r:'8–10',rest:'90 giây',main:1},
-    {n:'Siêu set: Hip thrust + Seated leg curl',s:3,r:'8–10 + 10–12',rest:'60 giây'},
-    {n:'Siêu set: Leg extension + Seated calf raise',s:2,r:'12–15 + 12–15',rest:'45–60 giây'}]}
+/* ----- Bài tập: tên, lưu ý form, hình (id trùng với EXA trong exart.js) ----- */
+const EX = {
+  bench: ['Bench press', 'Ép bả vai xuống ghế, chân bám sàn, hạ thanh chạm ngực dưới.'],
+  ohp: ['Overhead press đứng', 'Siết mông và bụng, đẩy thẳng lên, thanh qua mặt thì đưa đầu ra trước.'],
+  dips: ['Dips đeo tạ', 'Người hơi đổ trước, hạ tới khi vai ngang khuỷu, không nhún vai.'],
+  latraise: ['Lateral raise', 'Khuỷu hơi cong, nâng tới ngang vai, dẫn bằng khuỷu chứ không phải cổ tay.'],
+  pushdown: ['Triceps pushdown', 'Khuỷu khóa sát hông, chỉ cẳng tay chuyển động, duỗi hết ở dưới.'],
+  pullup: ['Pull-up đeo tạ', 'Kéo ngực lên xà, ép bả vai xuống, hạ chậm tới duỗi tay.'],
+  bbrow: ['Barbell row', 'Lưng thẳng, gập người khoảng 45°, kéo thanh về rốn, ép bả vai.'],
+  cablerow: ['Seated cable row', 'Ngồi thẳng lưng, kéo tay cầm về bụng, ưỡn ngực, không ngả người ra sau.'],
+  facepull: ['Face pull', 'Kéo dây về ngang mắt, tách hai tay ra, khuỷu cao hơn cổ tay.'],
+  ezcurl: ['EZ bar curl', 'Khuỷu đứng yên sát người, không đung đưa lưng, hạ chậm.'],
+  squat: ['Back squat', 'Thanh trên lưng trên, gối mở theo mũi chân, xuống tới đùi song song sàn.'],
+  rdl: ['Romanian deadlift', 'Đẩy hông ra sau, gối hơi chùng, thanh trượt sát đùi, lưng luôn thẳng.'],
+  legpress: ['Leg press', 'Lưng dưới dán ghế, hạ tới gối khoảng 90°, không khóa gối khi đẩy.'],
+  legcurl: ['Lying leg curl', 'Hông ép xuống ghế, cuộn gót về mông, hạ chậm 2–3 giây.'],
+  calfraise: ['Standing calf raise', 'Hạ gót sâu hết cỡ, kiễng lên cao, giữ 1 giây trên đỉnh.'],
+  inclinedb: ['Incline dumbbell press', 'Ghế dốc 30°, bả vai ép xuống, hạ tạ ngang ngực trên.'],
+  dbsp: ['Seated dumbbell shoulder press', 'Lưng tựa ghế, đẩy tạ lên trên đầu, không ưỡn lưng.'],
+  machinepress: ['Machine chest press', 'Tay cầm ngang ngực, ép bả vai, đẩy ra không khóa khuỷu.'],
+  cablefly: ['Cable fly', 'Khuỷu hơi cong cố định, khép tay về trước ngực như ôm thùng phuy.'],
+  cablelat: ['Cable lateral raise', 'Cáp từ dưới, nâng tay sang ngang tới vai, thân không nghiêng.'],
+  ohtri: ['Overhead triceps extension', 'Khuỷu chỉ thẳng lên trần, hạ tạ ra sau đầu, duỗi hết tay.'],
+  latpull: ['Lat pulldown', 'Ưỡn ngực, kéo thanh về ngực trên, khuỷu đi xuống và ra sau.'],
+  dbrow: ['One-arm dumbbell row', 'Lưng song song sàn, kéo tạ về hông như kéo cưa, không xoay người.'],
+  straightarm: ['Straight-arm pulldown', 'Tay gần thẳng, kéo thanh từ trên xuống đùi bằng lưng xô.'],
+  reardelt: ['Rear delt fly', 'Gập người, khuỷu hơi cong, dang tay sang ngang, ép bả vai cuối nhịp.'],
+  inclinecurl: ['Incline dumbbell curl', 'Nằm ghế dốc, tay buông sau người, cuộn tạ lên, khuỷu không đưa ra trước.'],
+  hammer: ['Hammer curl', 'Cầm tạ dọc như cầm búa, khuỷu sát người, cuộn lên vai.'],
+  hacksquat: ['Hack squat hoặc front squat', 'Lưng dán đệm (front squat thì thanh trước ngực), xuống sâu, gối theo mũi chân.'],
+  bulgarian: ['Bulgarian split squat (mỗi chân)', 'Chân sau gác ghế, hạ thẳng xuống, gối trước không đổ vào trong.'],
+  hipthrust: ['Hip thrust', 'Lưng trên tựa ghế, đẩy hông lên tới thân thẳng, siết mông 1 giây.'],
+  seatedcurl: ['Seated leg curl', 'Đùi kẹp chặt dưới đệm, cuộn gót xuống sâu, hạ chậm.'],
+  legext: ['Leg extension', 'Lưng tựa ghế, duỗi thẳng gối, giữ 1 giây rồi hạ chậm.'],
+  seatedcalf: ['Seated calf raise', 'Đệm đè ngay trên gối, hạ gót sâu, kiễng lên hết cỡ.'],
+  hangleg: ['Treo xà nâng chân', 'Treo chắc, không đung đưa, cuộn hông nâng chân lên ngang hông.'],
+  cablecrunch: ['Gập bụng với cáp', 'Quỳ, giữ dây sát đầu, cuộn bụng xuống, mông không ngồi xuống gót.'],
+  abwheel: ['Lăn bánh xe', 'Siết bụng và mông, lăn ra tới khi lưng sắp võng thì kéo về.'],
+  pallof: ['Pallof press', 'Đứng nghiêng với cáp, đẩy tay thẳng ra trước, không để thân xoay.'],
+  incline: ['Đi bộ dốc', 'Không vịn tay vào máy, bước vừa phải, người thẳng.'],
+  stairs: ['Leo cầu thang', 'Đứng thẳng, đặt cả bàn chân lên bậc, vịn nhẹ để giữ thăng bằng.'],
+  elliptical: ['Elliptical', 'Đạp bằng gót, tay đẩy kéo theo nhịp chân, giữ nhịp đều.'],
+  rower: ['Máy chèo', 'Đạp chân trước, ngả người sau, tay kéo về bụng sau cùng.'],
+  bike: ['Xe đạp tập', 'Chỉnh yên ngang hông, gối hơi chùng ở điểm thấp nhất.'],
+  ruck: ['Đeo balo đi bộ', 'Quai đeo chặt, balo sát lưng, đi thẳng người, bước đều.'],
+  airbike: ['Air bike', 'Đạp và đẩy tay cùng lúc, hiệp nhanh hết sức, hiệp chậm đạp nhẹ.'],
+  rope: ['Dây thừng', 'Gối chùng, lưng thẳng, quật dây bằng cả hai tay cho sóng đều.'],
+  sled: ['Đẩy sled', 'Người đổ thấp, tay thẳng, bước ngắn và nhanh bằng mũi chân.'],
+  kb: ['Swing tạ ấm', 'Bật hông đẩy tạ lên ngang ngực, tay chỉ dẫn hướng, lưng thẳng.'],
+  jack: ['Jumping jack bước', 'Bước sang ngang thay vì bật, tay vung qua đầu.'],
+  knees: ['Nâng gối cao tại chỗ', 'Gối lên ngang hông, đánh tay theo nhịp, tiếp đất bằng mũi chân.'],
+  climber: ['Leo núi', 'Tay thẳng dưới vai, kéo gối về ngực luân phiên, hông không chổng.'],
+  burpee: ['Burpee lùi chân', 'Ngồi xuống, lùi từng chân ra sau, bước về rồi đứng dậy, không bật.'],
+  box: ['Đấm gió', 'Thủ cằm, đấm thẳng luân phiên, xoay hông theo cú đấm.'],
+  fastsquat: ['Squat nhanh', 'Xuống tới đùi song song, đứng lên nhanh, gót không nhấc.']
 };
 
+// Buổi tạ theo thứ (1=T2 ... 6=T7). ss: siêu set (hai bài làm liền nhau rồi mới nghỉ)
+const SESSIONS = {
+  1:{code:'Push A',tag:'nặng',ex:[
+    {id:'bench',s:4,r:'4–6',rest:'2–3 phút',main:1},
+    {id:'ohp',s:4,r:'5–7',rest:'2–3 phút',main:1},
+    {id:'dips',s:3,r:'6–8',rest:'90 giây'},
+    {ss:[['latraise','12–15'],['pushdown','10–12']],s:3,rest:'45–60 giây'}]},
+  2:{code:'Pull A',tag:'nặng',ex:[
+    {id:'pullup',s:4,r:'5–7',rest:'2–3 phút',main:1},
+    {id:'bbrow',s:4,r:'6–8',rest:'2–3 phút',main:1},
+    {ss:[['cablerow','8–10'],['facepull','12–15']],s:3,rest:'45–60 giây'},
+    {id:'ezcurl',s:3,r:'6–8',rest:'90 giây'}]},
+  3:{code:'Legs A',tag:'nặng',ex:[
+    {id:'squat',s:4,r:'4–6',rest:'3 phút',main:1},
+    {id:'rdl',s:4,r:'6–8',rest:'2–3 phút',main:1},
+    {id:'legpress',s:3,r:'8–10',rest:'2 phút'},
+    {ss:[['legcurl','8–10'],['calfraise','8–10']],s:3,rest:'45–60 giây'}]},
+  4:{code:'Push B',tag:'vừa',ex:[
+    {id:'inclinedb',s:4,r:'8–10',rest:'2 phút',main:1},
+    {id:'dbsp',s:3,r:'8–10',rest:'90 giây',main:1},
+    {ss:[['machinepress','10–12'],['cablefly','12–15']],s:3,rest:'45–60 giây'},
+    {ss:[['cablelat','12–15'],['ohtri','10–12']],s:3,rest:'45–60 giây'}]},
+  5:{code:'Pull B',tag:'vừa',ex:[
+    {id:'latpull',s:4,r:'8–10',rest:'2 phút',main:1},
+    {id:'dbrow',s:3,r:'8–12',rest:'90 giây',main:1},
+    {ss:[['straightarm','12–15'],['reardelt','12–15']],s:3,rest:'45–60 giây'},
+    {ss:[['inclinecurl','10–12'],['hammer','10–12']],s:2,rest:'45–60 giây'}]},
+  6:{code:'Legs B',tag:'vừa',ex:[
+    {id:'hacksquat',s:4,r:'6–8',rest:'2–3 phút',main:1},
+    {id:'bulgarian',s:3,r:'8–10',rest:'90 giây',main:1},
+    {ss:[['hipthrust','8–10'],['seatedcurl','10–12']],s:3,rest:'60 giây'},
+    {ss:[['legext','12–15'],['seatedcalf','12–15']],s:2,rest:'45–60 giây'}]}
+};
 const ABS = {
-  A:{code:'Bụng A',ex:[{n:'Treo xà nâng chân',s:3,r:'10–15'},{n:'Gập bụng với cáp',s:3,r:'12–15'}]},
-  B:{code:'Bụng B',ex:[{n:'Lăn bánh xe',s:3,r:'8–12'},{n:'Pallof press',s:3,r:'12 mỗi bên'}]}
+  A:{code:'Bụng A',ex:[{id:'hangleg',s:3,r:'10–15',rest:'60 giây'},{id:'cablecrunch',s:3,r:'12–15',rest:'60 giây'}]},
+  B:{code:'Bụng B',ex:[{id:'abwheel',s:3,r:'8–12',rest:'60 giây'},{id:'pallof',s:3,r:'12 mỗi bên',rest:'60 giây'}]}
 };
 const ABS_BY_WD = {1:'A',3:'B',5:'A'};
 
+// art: id hình trong exart.js
 const LIGHT_CARDIO = [
-  {id:'incline',n:'Đi bộ dốc',d:'Máy chạy dốc 12–15%, 5–5,5 km/h, 30 phút'},
-  {id:'stairs',n:'Leo cầu thang',d:'Máy leo cầu thang, 20–25 phút'},
-  {id:'elliptical',n:'Elliptical',d:'Đều tay, 25–30 phút'},
-  {id:'rower',n:'Máy chèo',d:'Nhịp nhẹ, 20–25 phút'},
-  {id:'bike',n:'Xe đạp tập',d:'Đạp đều, 30 phút'},
-  {id:'ruck',n:'Đeo balo',d:'Balo 8–10 kg, đi bộ 30 phút'}
+  {id:'incline',art:'incline',n:'Đi bộ dốc',d:'Máy chạy dốc 12–15%, 5–5,5 km/h, 30 phút'},
+  {id:'stairs',art:'stairs',n:'Leo cầu thang',d:'Máy leo cầu thang, 20–25 phút'},
+  {id:'elliptical',art:'elliptical',n:'Elliptical',d:'Đều tay, 25–30 phút'},
+  {id:'rower',art:'rower',n:'Máy chèo',d:'Nhịp nhẹ, 20–25 phút'},
+  {id:'bike',art:'bike',n:'Xe đạp tập',d:'Đạp đều, 30 phút'},
+  {id:'ruck',art:'ruck',n:'Đeo balo',d:'Balo 8–10 kg, đi bộ 30 phút'}
 ];
 const HEAVY_CARDIO = [
-  {id:'airbike',n:'Air bike',d:'15 giây hết sức / 45 giây nhẹ × 10 hiệp'},
-  {id:'bike',n:'Xe đạp',d:'20 giây hết sức / 40 giây nhẹ × 10 hiệp'},
-  {id:'rower',n:'Máy chèo',d:'30 giây hết sức / 30 giây nhẹ × 10 hiệp'},
-  {id:'rope',n:'Dây thừng',d:'20 giây quật / 40 giây nghỉ × 10 hiệp'},
-  {id:'sled',n:'Đẩy sled',d:'Đẩy 20 m × 8 lượt, đi bộ về là nghỉ'},
-  {id:'kb',n:'Swing tạ ấm',d:'EMOM 12 phút: mỗi phút 12–15 cái'},
-  {id:'stairs',n:'Leo cầu thang',d:'1 phút nhanh / 1 phút chậm × 8'},
-  {id:'circuit',n:'Không cần máy',d:'5 bài × 40 giây làm / 20 giây nghỉ × 3 vòng: jumping jack bước, nâng gối cao tại chỗ, leo núi, burpee lùi chân không bật, đấm gió hoặc squat nhanh'}
+  {id:'airbike',art:'airbike',n:'Air bike',d:'15 giây hết sức / 45 giây nhẹ × 10 hiệp'},
+  {id:'bike',art:'bike',n:'Xe đạp',d:'20 giây hết sức / 40 giây nhẹ × 10 hiệp',tip:'Tăng lực cản, hiệp nhanh đạp hết sức, hiệp chậm đạp nhẹ để hồi.'},
+  {id:'rower',art:'rower',n:'Máy chèo',d:'30 giây hết sức / 30 giây nhẹ × 10 hiệp',tip:'Hiệp nhanh vẫn giữ thứ tự chân, người, tay. Đừng kéo bằng tay trước.'},
+  {id:'rope',art:'rope',n:'Dây thừng',d:'20 giây quật / 40 giây nghỉ × 10 hiệp'},
+  {id:'sled',art:'sled',n:'Đẩy sled',d:'Đẩy 20 m × 8 lượt, đi bộ về là nghỉ'},
+  {id:'kb',art:'kb',n:'Swing tạ ấm',d:'EMOM 12 phút: mỗi phút 12–15 cái'},
+  {id:'stairs',art:'stairs',n:'Leo cầu thang',d:'1 phút nhanh / 1 phút chậm × 8',tip:'Phút nhanh bước dồn dập nhưng vẫn đặt cả bàn chân, phút chậm thở đều.'},
+  {id:'circuit',art:'jack',n:'Không cần máy',d:'5 bài × 40 giây làm / 20 giây nghỉ × 3 vòng',sub:['jack','knees','climber','burpee',['box','fastsquat']]}
 ];
 
-// Thực đơn: [giờ, đạm, cơm chín (g), rau & khác]
-const MENU_TRAIN = {
-  kcal:'~1.530', macro:'Đạm 210 g · tinh bột 79 g · béo 42 g',
-  meals:[
-    ['7h','2 quả trứng luộc, 3 lòng trắng, 100 g ức gà luộc',0,'100 g dưa leo hoặc cà chua'],
-    ['11h30','200 g ức gà nướng nồi chiên không dầu',0,'200 g rau muống xào, 7 g dầu, 1 quả ổi'],
-    ['16h (trước tập)','200 g ức gà áp chảo',100,'100 g rau, 7 g dầu'],
-    ['19h30 (sau tập)','200 g ức gà xào sả ớt, 100 g đậu phụ sốt cà',100,'100 g bắp cải hoặc su su luộc, 3 g dầu']
-  ],
-  total:'700 g ức gà · 2 trứng + 3 lòng trắng · 100 g đậu phụ · 200 g cơm · 500 g rau · 1 quả ổi · 17 g dầu'
+/* ----- Thực đơn: từng món, gram, kcal (đạm/tinh bột/béo tính theo 100 g hoặc 1 quả) ----- */
+// [tên, icon, đơn vị ('g' hoặc 'quả'), P, C, F theo 100 g hoặc 1 quả]
+const FOOD = {
+  chicken: ['Ức gà (cân sống)', 'chicken', 'g', 23, 0, 1.2],
+  egg: ['Trứng gà luộc', 'egg', 'quả', 6.3, .4, 5],
+  white: ['Lòng trắng trứng', 'eggwhite', 'quả', 3.6, .2, .1],
+  tofu: ['Đậu phụ', 'tofu', 'g', 10.9, .7, 5.4],
+  rice: ['Cơm chín', 'rice', 'g', 2.7, 28, .3],
+  cuke: ['Dưa leo hoặc cà chua', 'cucumber', 'g', .8, 3, .2],
+  morning: ['Rau muống xào', 'greens', 'g', 3, 2.5, .2],
+  bokchoy: ['Cải ngọt xào', 'greens', 'g', 1.7, 2.5, .2],
+  veg: ['Rau luộc', 'greens', 'g', 1.5, 3, .2],
+  cabbage: ['Bắp cải hoặc su su luộc', 'cabbage', 'g', 1.3, 4, .1],
+  oil: ['Dầu ăn', 'oil', 'g', 0, 0, 100],
+  guava: ['Ổi', 'guava', 'quả', 2.6, 14, 1],
+  banana: ['Chuối', 'banana', 'quả', 1.1, 23, .3]
 };
-const MENU_REST = {
-  kcal:'~1.360', macro:'Đạm 210 g · tinh bột 36 g · béo 42 g',
-  meals:[
-    ['7h','2 quả trứng luộc, 3 lòng trắng, 100 g ức gà luộc',0,'100 g dưa leo hoặc cà chua'],
-    ['11h30','250 g ức gà nướng nồi chiên không dầu',0,'200 g cải ngọt xào, 7 g dầu'],
-    ['16h','125 g ức gà luộc, 100 g đậu phụ',0,'100 g rau, 4 g dầu'],
-    ['19h30','250 g ức gà kho gừng',80,'100 g rau, 7 g dầu']
-  ],
-  total:'725 g ức gà · 2 trứng + 3 lòng trắng · 100 g đậu phụ · 80 g cơm · 500 g rau · 18 g dầu'
-};
-// Ngày ăn nhiều = ngày tập + ~650 g cơm chia 4 bữa + 2 quả chuối
-const REFEED_EXTRA = [160,160,165,165];
-const REFEED_INFO = {kcal:'~2.500', macro:'Đạm 230 g · tinh bột 300 g · béo 45 g'};
+// Mỗi bữa: [giờ, tên bữa, [[món, lượng, ghi chú]...]]
+const MENU_TRAIN = [
+  ['7h', 'Bữa sáng', [['egg', 2], ['white', 3], ['chicken', 100, 'luộc'], ['cuke', 100]]],
+  ['11h30', 'Bữa trưa', [['chicken', 200, 'nướng nồi chiên không dầu'], ['morning', 200], ['oil', 7], ['guava', 1]]],
+  ['16h', 'Trước tập', [['chicken', 200, 'áp chảo'], ['rice', 100], ['veg', 100], ['oil', 7]]],
+  ['19h30', 'Sau tập', [['chicken', 200, 'xào sả ớt'], ['tofu', 100, 'sốt cà'], ['rice', 100], ['cabbage', 100], ['oil', 3]]]
+];
+const MENU_REST = [
+  ['7h', 'Bữa sáng', [['egg', 2], ['white', 3], ['chicken', 100, 'luộc'], ['cuke', 100]]],
+  ['11h30', 'Bữa trưa', [['chicken', 250, 'nướng nồi chiên không dầu'], ['bokchoy', 200], ['oil', 7]]],
+  ['16h', 'Bữa xế', [['chicken', 125, 'luộc'], ['tofu', 100], ['veg', 100], ['oil', 4]]],
+  ['19h30', 'Bữa tối', [['chicken', 250, 'kho gừng'], ['rice', 80], ['veg', 100], ['oil', 7]]]
+];
+// Ngày ăn nhiều = ngày tập + ~650 g cơm chia 4 bữa + 2 quả chuối (bữa 3 và 4)
+const REFEED_EXTRA = [160, 160, 165, 165];
+function menuFor(I) {
+  const base = I.train ? MENU_TRAIN : MENU_REST;
+  return base.map(([t, n, items], i) => {
+    let L = items.map(x => x.slice());
+    if (I.refeed) {
+      const r = L.find(x => x[0] === 'rice');
+      if (r) { r[3] = REFEED_EXTRA[i]; r[1] += REFEED_EXTRA[i]; } else L.splice(1, 0, ['rice', REFEED_EXTRA[i], '', REFEED_EXTRA[i]]);
+      if (i >= 2) L.push(['banana', 1, '', 1]);
+    }
+    return [t, n, L];
+  });
+}
+function foodMacro(id, qty) {
+  const F = FOOD[id], k = F[2] === 'g' ? qty / 100 : qty;
+  const p = F[3] * k, c = F[4] * k, f = F[5] * k;
+  return { p, c, f, kcal: p * 4 + c * 4 + f * 9 };
+}
+function sumMacro(list) { return list.reduce((a, [id, q]) => { const m = foodMacro(id, q); a.p += m.p; a.c += m.c; a.f += m.f; a.kcal += m.kcal; return a; }, { p: 0, c: 0, f: 0, kcal: 0 }); }
 
 const TARGETS = [[0,null],[28,85],[56,78],[84,72]]; // [ngày, kg]; ngày 0 = cân ban đầu
 
@@ -224,75 +307,3 @@ const Q_FIRST = [
 'Phát súng đầu tiên. Chốt hôm nay để mở màn.'
 ];
 
-/* ===================== PET ===================== */
-const PETS = [
-  {id:'wolf',  name:'Sói Lửa',      need:1,  rar:0, intro:'Đứa đầu tiên theo ông từ quả trứng. Nóng tính, trung thành, ghét nhất là ngày bỏ tập.'},
-  {id:'bear',  name:'Gấu Thép',     need:3,  rar:0, intro:'Thân thép, đầu lạnh. Nâng gì cũng được, trừ trà sữa.'},
-  {id:'fox',   name:'Cáo Sấm',      need:7,  rar:1, intro:'Nhanh như chớp, lắm mồm như sấm. Thích đếm bước chân hộ ông.'},
-  {id:'dragon',name:'Rồng Con',     need:14, rar:1, intro:'Phun khói chứ chưa phun lửa. Ăn đúng thực đơn thì lớn nhanh.'},
-  {id:'tiger', name:'Hổ Băng',      need:21, rar:1, intro:'Lạnh lùng ngoài mặt, trong bụng là cả một lò sưởi kỷ luật.'},
-  {id:'owl',   name:'Cú Bóng Đêm',  need:30, rar:2, intro:'Canh giấc ngủ của ông. Thức khuya là nó trừng mắt.'},
-  {id:'rhino', name:'Tê Giác Giáp', need:45, rar:2, intro:'Húc tan mọi cái cớ. Giáp đồng, sừng ngà, không lùi bước nào.'},
-  {id:'mecha', name:'Khủng Long Máy',need:60,rar:2, intro:'Chạy bằng đạm và mồ hôi. Kính đỏ quét thấy mỡ từ xa.'},
-  {id:'uni',   name:'Kỳ Lân Điện',  need:75, rar:3, intro:'Bờm phóng điện, sừng gọi sét. Chỉ hiện ra với người không bỏ cuộc.'},
-  {id:'phoenix',name:'Phượng Hoàng',need:84, rar:3, intro:'Tái sinh từ 84 ngày lửa. Ai có nó là đã về đích.'}
-];
-const RARITY = [
-  {n:'Thường',c:'#9fb1c9'},
-  {n:'Hiếm',c:'#38b6ff'},
-  {n:'Sử thi',c:'#b46bff'},
-  {n:'Huyền thoại',c:'#ffc21f'}
-];
-const LV_NEED = [0,2,3,4,5]; // thức ăn cần để lên Lv2..Lv5
-const LV_PERK = ['','Khăn chiến','Huy chương','Hào quang','Vương miện'];
-
-/* ===================== ĐỒ TRANG TRÍ ===================== */
-const DECOR = [
-  {id:'grass',  n:'Bãi cỏ hoa',   p:10,  ic:'🌼', d:'Cỏ dày, hoa nhỏ lấm tấm khắp sân.'},
-  {id:'rock',   n:'Đá tảng',      p:20,  ic:'🪨', d:'Mấy tảng đá cho pet ngồi hóng gió.'},
-  {id:'fire',   n:'Lửa trại',     p:30,  ic:'🔥', d:'Đống lửa giữa sân, cháy suốt đêm.'},
-  {id:'lantern',n:'Đèn lồng',     p:40,  ic:'🏮', d:'Dây đèn lồng đỏ vàng giăng ngang trời.'},
-  {id:'flag',   n:'Cờ chiến',     p:60,  ic:'🚩', d:'Cờ in chữ −25, cắm giữa sân.'},
-  {id:'tent',   n:'Lều trại',     p:80,  ic:'⛺', d:'Lều sọc cho pet chui vào ngủ.'},
-  {id:'tree',   n:'Cây cổ thụ',   p:100, ic:'🌳', d:'Tán to, rễ chắc, bóng mát cả góc sân.'},
-  {id:'rack',   n:'Giàn tạ',      p:120, ic:'🏋️', d:'Giàn squat mini để pet tập theo chủ.'},
-  {id:'falls',  n:'Thác nước',    p:150, ic:'💦', d:'Vách đá có thác chảy ầm ầm.'},
-  {id:'tower',  n:'Tháp canh',    p:180, ic:'🗼', d:'Tháp gỗ cao, đứng trên đó thấy cả vùng.'},
-  {id:'night',  n:'Bầu trời đêm', p:220, ic:'🌙', d:'Đổi trời sang đêm sao và trăng khuyết.'},
-  {id:'rainbow',n:'Cầu vồng',     p:260, ic:'🌈', d:'Cầu vồng vắt ngang sau núi.'}
-];
-
-/* ===================== THÀNH TỰU ===================== */
-// t: 0 đồng, 1 bạc, 2 vàng. Hàm kiểm tra nhận ctx (tính sẵn).
-const BADGES = [
-  {id:'first', ic:'🥚', n:'Buổi đầu tiên', d:'Chốt ngày đầu tiên', t:0, ok:c=>c.total>=1},
-  {id:'s3',  ic:'🔥', n:'Chuỗi 3 ngày',  d:'Chốt 3 ngày liền', t:0, ok:c=>c.best>=3, pr:c=>[c.best,3]},
-  {id:'s7',  ic:'🔥', n:'Chuỗi 7 ngày',  d:'Chốt 7 ngày liền', t:0, ok:c=>c.best>=7, pr:c=>[c.best,7]},
-  {id:'s14', ic:'🔥', n:'Chuỗi 14 ngày', d:'Chốt 14 ngày liền', t:1, ok:c=>c.best>=14, pr:c=>[c.best,14]},
-  {id:'s30', ic:'🔥', n:'Chuỗi 30 ngày', d:'Chốt 30 ngày liền', t:1, ok:c=>c.best>=30, pr:c=>[c.best,30]},
-  {id:'s60', ic:'🔥', n:'Chuỗi 60 ngày', d:'Chốt 60 ngày liền', t:2, ok:c=>c.best>=60, pr:c=>[c.best,60]},
-  {id:'k5',  ic:'⚖️', n:'Giảm 5 kg',  d:'Cân sáng thấp hơn cân ban đầu 5 kg', t:0, ok:c=>c.lost>=5, pr:c=>[c.lost,5]},
-  {id:'k10', ic:'⚖️', n:'Giảm 10 kg', d:'Cân sáng thấp hơn cân ban đầu 10 kg', t:1, ok:c=>c.lost>=10, pr:c=>[c.lost,10]},
-  {id:'k15', ic:'⚖️', n:'Giảm 15 kg', d:'Cân sáng thấp hơn cân ban đầu 15 kg', t:1, ok:c=>c.lost>=15, pr:c=>[c.lost,15]},
-  {id:'k20', ic:'⚖️', n:'Giảm 20 kg', d:'Cân sáng thấp hơn cân ban đầu 20 kg', t:2, ok:c=>c.lost>=20, pr:c=>[c.lost,20]},
-  {id:'k25', ic:'👑', n:'Giảm 25 kg', d:'Chạm mốc −25 kg', t:2, ok:c=>c.lost>=25, pr:c=>[c.lost,25]},
-  {id:'w1',  ic:'🗓️', n:'Xong tuần 1',  d:'Chốt ít nhất 5/7 ngày của tuần 1', t:0, ok:c=>c.week[1]>=5, pr:c=>[c.week[1],5]},
-  {id:'w4',  ic:'🗓️', n:'Xong tuần 4',  d:'Chốt ít nhất 5/7 ngày của tuần 4', t:1, ok:c=>c.week[4]>=5, pr:c=>[c.week[4],5]},
-  {id:'w8',  ic:'🗓️', n:'Xong tuần 8',  d:'Chốt ít nhất 5/7 ngày của tuần 8', t:1, ok:c=>c.week[8]>=5, pr:c=>[c.week[8],5]},
-  {id:'w12', ic:'🏁', n:'Về đích tuần 12', d:'Chốt ít nhất 5/7 ngày của tuần 12', t:2, ok:c=>c.week[12]>=5, pr:c=>[c.week[12],5]},
-  {id:'perfect', ic:'💎', n:'Tuần sắt', d:'Chốt đủ 7/7 ngày trong một tuần', t:1, ok:c=>c.perfectWeek, pr:c=>[c.maxWeek,7]},
-  {id:'water7', ic:'💧', n:'Lạc đà', d:'Uống đủ 4 lít 7 ngày liền', t:0, ok:c=>c.runWater>=7, pr:c=>[c.runWater,7]},
-  {id:'sleep7', ic:'😴', n:'Ngủ như gấu', d:'Ngủ đủ 7–8 tiếng 7 đêm liền', t:0, ok:c=>c.runSleep>=7, pr:c=>[c.runSleep,7]},
-  {id:'weigh7', ic:'📏', n:'Cân đều tay', d:'Cân buổi sáng 7 ngày liền', t:0, ok:c=>c.runWeigh>=7, pr:c=>[c.runWeigh,7]},
-  {id:'steps30', ic:'👣', n:'Chân sắt', d:'Đủ 15.000 bước 30 ngày', t:1, ok:c=>c.steps>=30, pr:c=>[c.steps,30]},
-  {id:'heavy10', ic:'⚡', n:'Phổi thép', d:'Xong 10 buổi cardio nặng', t:1, ok:c=>c.heavy>=10, pr:c=>[c.heavy,10]},
-  {id:'refeed', ic:'🍚', n:'Nạp kho', d:'Chốt một ngày ăn nhiều', t:0, ok:c=>c.refeed>=1},
-  {id:'comeback', ic:'💪', n:'Quay lại mạnh hơn', d:'Chốt lại ngay sau khi đứt chuỗi', t:0, ok:c=>c.comeback},
-  {id:'shield', ic:'🛡️', n:'Có khiên', d:'Nhận khiên giữ chuỗi đầu tiên', t:0, ok:c=>c.best>=7},
-  {id:'pets5', ic:'🐾', n:'Chủ trại', d:'Mở khóa 5 pet', t:1, ok:c=>c.pets>=5, pr:c=>[c.pets,5]},
-  {id:'pets10', ic:'🏆', n:'Đủ bộ 10 pet', d:'Mở khóa cả 10 pet', t:2, ok:c=>c.pets>=10, pr:c=>[c.pets,10]},
-  {id:'lv5', ic:'⭐', n:'Pet max cấp', d:'Nuôi một pet lên Lv5', t:1, ok:c=>c.maxLv>=5, pr:c=>[c.maxLv,5]},
-  {id:'decor6', ic:'🏕️', n:'Kiến trúc sư', d:'Mua 6 món trang trí', t:1, ok:c=>c.decor>=6, pr:c=>[c.decor,6]}
-];
-const BADGE_REWARD = [{c:20,f:0},{c:40,f:1},{c:80,f:2}];
-const STREAK_BONUS = {7:{c:30,f:1},14:{c:50,f:1},30:{c:100,f:2},60:{c:150,f:2}};

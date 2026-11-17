@@ -11,7 +11,7 @@
     if (!w || document.getElementById('updbar')) return;
     const b = document.createElement('button');
     b.id = 'updbar'; b.className = 'updbar'; b.type = 'button';
-    b.textContent = '✨ Có bản mới — chạm để cập nhật';
+    b.innerHTML = (typeof ic === 'function' ? ic('sparkle') + ' ' : '') + 'Có bản mới, chạm để cập nhật';
     b.addEventListener('click', () => {
       asked = true; b.disabled = true; b.textContent = 'Đang cập nhật…';
       try { store.now(); } catch (e) { }

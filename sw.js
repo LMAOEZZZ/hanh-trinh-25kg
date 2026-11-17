@@ -1,7 +1,7 @@
 /* Service worker của Hành Trình -25kg.
    Mỗi lần sửa bất kỳ file nào của app: tăng VERSION (v1 → v2 …) để máy người dùng nhận bản mới.
    Service worker chỉ giữ file của app trong bộ nhớ đệm, KHÔNG đụng tới dữ liệu (localStorage, IndexedDB). */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const PREFIX = 'hanh-trinh-25kg-';
 const CACHE = PREFIX + VERSION;
 const ASSETS = [
@@ -11,7 +11,14 @@ const ASSETS = [
   './css/fonts.css',
   './css/app.css',
   './js/data.js',
-  './js/art.js',
+  './js/econ.js',
+  './js/gfx.js',
+  './js/pets.js',
+  './js/wear.js',
+  './js/scenes.js',
+  './js/icons.js',
+  './js/exart.js',
+  './js/camp.js',
   './js/app.js',
   './js/pwa.js',
   './fonts/baloo-2-latin-600-normal.woff2',
