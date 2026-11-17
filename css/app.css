@@ -841,3 +841,30 @@ body.shake .hatchx{animation:shake .9s cubic-bezier(.36,.07,.19,.97)}
   .hx-egg.k3{filter:brightness(1.6) drop-shadow(0 0 18px var(--rc))}
 }
 @media (max-height:700px){.hx-res:has(.hx-ach) .hx-intro{display:none}.hx-stage{width:190px;height:190px}.hx-egg{width:180px;height:180px}.hx-pet{width:190px}.hx-name{font-size:30px}.hx-top{min-height:56px}}
+
+/* ===================== BẢN 6: Sử thi chưa có chỉ hiện bóng, thanh tab phụ tab Pet ===================== */
+/* Thanh chỉ số: nền đặc tới hết hàng chip, chỉ mờ ở 8px đệm dưới cùng.
+   Trước đây nền mờ dần từ 70% chiều cao; trên iPhone có safe-area thì phần mờ rơi đúng hàng chip, nội dung cuộn qua lộ ra sau chip. */
+#top{background:linear-gradient(#1a1250 calc(100% - 8px), rgba(26,18,80,0))}
+/* Thanh Trại / Vòng quay / Cửa hàng dính ngay dưới thanh chỉ số (cao 52px + safe-area, chồng 1px cho khỏi hở).
+   Lớp .stuck do app.js bật khi đang dính: thêm nền đặc để nội dung cuộn qua không lộ ra sau. */
+.pv-tabs{position:sticky;top:calc(51px + env(safe-area-inset-top));z-index:15;margin:6px calc(-1 * var(--sr)) 6px calc(-1 * var(--sl));padding:6px var(--sr) 8px var(--sl)}
+.pv-tabs .seg{margin:0}
+.pv-tabs.stuck{background:linear-gradient(#1a1250 calc(100% - 8px), rgba(26,18,80,0))}
+.pv-tabs.stuck::before{content:"";position:absolute;left:0;right:0;top:-10px;height:10px;background:#1a1250;pointer-events:none}
+/* Bóng Sử thi: đen tuyền, viền sáng, quầng cầu vồng quay chậm phía sau (.aura) */
+.ep-sil{position:relative;z-index:1;display:grid;place-items:center;width:100%;height:100%}
+.ep-sil .pet-svg{position:relative;z-index:1;width:100%;height:100%}
+.ep-sil .pet-svg,.pcard.epic.locked .pc-art .pet-svg{filter:drop-shadow(0 0 1.2px #fff) drop-shadow(0 0 1.2px #fff) drop-shadow(0 0 6px rgba(255,214,90,.8))}
+.ep-sil.aura::before{content:"";position:absolute;inset:14%;border-radius:50%;pointer-events:none;opacity:.62;filter:blur(12px);
+  background:conic-gradient(#ff3b4f,#ffd21f,#3fe06a,#33e1ff,#b46bff,#ff3b4f);animation:spin 7s linear infinite}
+/* Màn ra Sử thi: bóng hiện giữa cột sáng, lóe sáng xong mới đổi sang hình màu */
+.er-pet.er-two{opacity:1;display:grid;height:220px}
+.er-two > div{grid-area:1/1;width:100%;height:100%;min-width:0}
+.er-two .er-col{opacity:0}
+.er-two .er-sil{animation:er-sil .45s ease-out .1s backwards}
+@keyframes er-sil{0%{opacity:0;transform:scale(.55)}100%{opacity:1;transform:scale(1)}}
+.epic-rev.shown .er-pet.er-two{animation:none}
+.epic-rev.shown .er-two .er-col{opacity:1;animation:popin .7s cubic-bezier(.3,1.7,.5,1)}
+.epic-rev.shown .er-two .er-sil{animation:none;opacity:0}
+@media (prefers-reduced-motion: reduce){.ep-sil.aura::before{animation:none}.er-two .er-sil{animation:none}}

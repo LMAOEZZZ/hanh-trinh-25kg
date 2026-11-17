@@ -341,7 +341,7 @@ function render() {
   const v = $('#view');
   v.innerHTML = ui.tab === 'today' ? nudgeHTML() + viewToday(D) : ui.tab === 'calendar' ? viewCal(D) : ui.tab === 'pets' ? viewPets(D) : ui.tab === 'weight' ? viewWeight(D) : viewBadges(D);
   if (ui.tab === 'weight') bindChart();
-  if (ui.tab === 'pets') { lazyPets(); campLazy(); }
+  if (ui.tab === 'pets') { lazyPets(); campLazy(); pvTabsState(); }
   if (ui.pop) { const el = document.querySelector(ui.pop); if (el) { el.classList.remove('bounce'); void el.offsetWidth; el.classList.add('bounce'); } ui.pop = null; }
   if (ui.pet && $('#petview')) renderPetView();
   flushCel();
@@ -529,7 +529,7 @@ function nestHTML(D) {
 function viewPets(D) {
   const ne = epicOwnedN(), spin = hasSpin(D);
   let h = `<section class="hero"><div><div class="daynum tout" style="font-size:38px">Trại pet</div><div class="date">${D.pets}/${NPETS} pet · ${ne}/${EPICS.length} Sử thi · cứ 2 ngày chốt nhận 1 trứng</div></div></section>
-  <div class="seg three" role="tablist"><button role="tab" data-act="pview" data-v="camp" aria-selected="${ui.petView === 'camp'}">${ic('paw', 'i-btn')} Trại${D.nest ? '<span class="seg-dot"></span>' : ''}</button><button role="tab" data-act="pview" data-v="gacha" aria-selected="${ui.petView === 'gacha'}">${ic('wheel', 'i-btn')} Vòng quay${spin ? '<span class="seg-dot"></span>' : ''}</button><button role="tab" data-act="pview" data-v="shop" aria-selected="${ui.petView === 'shop'}">${ic('bag', 'i-btn')} Cửa hàng</button></div>`;
+  <div class="pv-tabs" id="pv-tabs"><div class="seg three" role="tablist"><button role="tab" data-act="pview" data-v="camp" aria-selected="${ui.petView === 'camp'}">${ic('paw', 'i-btn')} Trại${D.nest ? '<span class="seg-dot"></span>' : ''}</button><button role="tab" data-act="pview" data-v="gacha" aria-selected="${ui.petView === 'gacha'}">${ic('wheel', 'i-btn')} Vòng quay${spin ? '<span class="seg-dot"></span>' : ''}</button><button role="tab" data-act="pview" data-v="shop" aria-selected="${ui.petView === 'shop'}">${ic('bag', 'i-btn')} Cửa hàng</button></div></div>`;
   if (ui.petView === 'shop') return h + viewShop(D);
   if (ui.petView === 'gacha') return h + viewGacha(D);
   h += nestHTML(D);
@@ -558,6 +558,21 @@ function viewPets(D) {
   });
   return h + `</div>`;
 }
+/* Thanh tab phụ (Trại / Vòng quay / Cửa hàng) dính dưới thanh chỉ số (bản 6).
+   Đang dính thì bật .stuck để có nền đặc. Đổi tab phụ lúc đã cuộn quá thanh thì đưa về đầu tab mới, thanh vẫn hiện rõ. */
+function pvTabsState() {
+  const t = $('#pv-tabs'); if (!t) return;
+  const top = parseFloat(getComputedStyle(t).top) || 0;
+  t.classList.toggle('stuck', window.scrollY > 0 && t.getBoundingClientRect().top <= top + .5);
+}
+function pvTabsTop() {
+  const t = $('#pv-tabs'), hero = t && t.previousElementSibling; if (!t || !hero) return;
+  const cs = getComputedStyle(t), y = Math.max(0, Math.round(hero.getBoundingClientRect().bottom + window.scrollY + (parseFloat(cs.marginTop) || 0) - (parseFloat(cs.top) || 0)));
+  if (window.scrollY > y) window.scrollTo(0, y);
+  pvTabsState();
+}
+let pvRaf = 0;
+window.addEventListener('scroll', () => { if (!pvRaf) pvRaf = requestAnimationFrame(() => { pvRaf = 0; pvTabsState(); }); }, { passive: true });
 // Dựng SVG pet khi ô hiện ra
 let lazyObs = null;
 function lazyPets() {
@@ -636,7 +651,7 @@ function openLockedPet(id) {
   const p = PET_BY[id], D = derive(), E = ELEMENTS[p.el];
   if (p.epic) {
     const q = epicQueue(), k = q.indexOf(p);
-    openModal(`<h2>Pet Sử thi bí ẩn</h2><div style="display:flex;justify-content:center"><div style="width:180px">${petSVG(id, 1, { sil: true })}</div></div>
+    openModal(`<h2>Pet Sử thi bí ẩn</h2><div style="display:flex;justify-content:center"><div style="width:180px;height:180px">${epicSil(id, 1)}</div></div>
       <p style="text-align:center;margin:4px 0"><span class="tag-el" style="background:${E.c}">${E.n}</span> ${rarTag(4)}</p>
       <p style="text-align:center">Chỉ có từ <b>vòng quay</b>. ${k === 0 ? 'Đang là con <b>nổi bật</b> ở lượt quay tới.' : `Sẽ nổi bật sau <b>${k}</b> lượt quay nữa (nếu chưa ra con khác trước).`}</p>
       <button class="btn block" data-act="gx-open">${ic('wheel', 'i-btn')} Tới vòng quay</button>`);
@@ -1169,7 +1184,7 @@ document.addEventListener('click', e => {
     case 'wdel': delete state.w[b.dataset.date]; persist(); render(); toast('Đã xóa số cân ' + fmtDM(b.dataset.date)); break;
     case 'calprev': case 'calnext': { let [y, m] = ui.calMonth; m += a === 'calprev' ? -1 : 1; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } ui.calMonth = [y, m]; render(); break; }
     case 'calday': openDay(b.dataset.date); break;
-    case 'pview': ui.petView = b.dataset.v; render(); break;
+    case 'pview': ui.petView = b.dataset.v; render(); pvTabsTop(); break;
     case 'shopcat': ui.shopCat = b.dataset.c; render(); break;
     case 'to-shop': ui.petView = 'shop'; ui.shopCat = b.dataset.c || 'wear'; closePet(); go('pets'); break;
     case 'pet': openPet(b.dataset.id); break;

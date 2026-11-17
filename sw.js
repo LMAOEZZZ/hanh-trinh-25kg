@@ -1,7 +1,7 @@
 /* Service worker của Hành Trình -25kg.
    Mỗi lần sửa bất kỳ file nào của app: tăng VERSION (v1 → v2 …) để máy người dùng nhận bản mới.
    Service worker chỉ giữ file của app trong bộ nhớ đệm, KHÔNG đụng tới dữ liệu (localStorage, IndexedDB). */
-const VERSION = 'v5';
+const VERSION = 'v6';
 const PREFIX = 'hanh-trinh-25kg-';
 const CACHE = PREFIX + VERSION;
 const ASSETS = [

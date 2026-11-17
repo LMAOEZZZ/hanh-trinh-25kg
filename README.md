@@ -8,7 +8,7 @@ App theo dõi 84 ngày giảm 25 kg: chốt ngày, nuôi pet, ghi cân. Cài ra 
 
 - **Trứng mỗi 2 ngày (bản 5)**: chốt đủ 1, 3, 5, … ngày (không cần liên tục) là nhận 1 trứng, tổng 42 trứng. Trứng nằm trong **ổ trứng** ở tab Pet, chạm để gõ: trứng rung, nứt, lóe sáng theo màu độ hiếm rồi nở. Mỗi trứng ra 1 pet thường **ngẫu nhiên** trong các con chưa có, không bao giờ trùng. Con càng hiếm càng ít khi ra sớm (trọng số Thường 5, Hiếm 4, Siêu hiếm 3, Huyền thoại 2), nhưng vẫn có thể ra ngay từ quả đầu.
 - **Vòng quay Sử thi**: mỗi ngày 1 lượt khi xong hết mục trong ngày (kể cả mục phụ) và đã chốt ngày. Quên quay thì quay bù hôm qua được, ngày bỏ lỡ không cộng dồn lượt. Ô thưởng xếp theo độ hiếm: pet Sử thi (11%), đồ độc quyền (6%), khiên giữ chuỗi (8%), thịt x2 ngày mai (10%), +12 thịt (14%), +90 xu (13%), +5 thịt (20%), +30 xu (18%).
-- **7 pet Sử thi**, mỗi hệ một con: Nghê Lửa, Hạc Băng Cực Quang, Thanh Long Sấm, Bạch Tượng Ngọc, Bướm Thần Rừng, Cá Voi Ngân Hà, Ngựa Sắt Thánh Gióng. Ô Sử thi luôn là con "nổi bật", đổi lần lượt qua các con chưa có sau mỗi lượt quay. Thanh **Năng lượng sử thi** đếm số lượt hụt: hụt 7 lượt liền thì lượt thứ 8 chắc chắn ra, nên tối đa 56 lượt là đủ 7 con. Đủ bộ rồi thì ô Sử thi thành Rương Sử thi (+30 thịt +120 xu).
+- **7 pet Sử thi**, mỗi hệ một con: Nghê Lửa, Hạc Băng Cực Quang, Thanh Long Sấm, Bạch Tượng Ngọc, Bướm Thần Rừng, Cá Voi Ngân Hà, Ngựa Sắt Thánh Gióng. Ô Sử thi luôn là con "nổi bật" (chỉ hiện bóng và hệ, chưa lộ tên), đổi lần lượt qua các con chưa có sau mỗi lượt quay. Thanh **Năng lượng sử thi** đếm số lượt hụt: hụt 7 lượt liền thì lượt thứ 8 chắc chắn ra, nên tối đa 56 lượt là đủ 7 con. Đủ bộ rồi thì ô Sử thi thành Rương Sử thi (+30 thịt +120 xu).
 - **Độ hiếm**: Thường → Hiếm → Siêu hiếm → Huyền thoại → Sử thi. Bậc tím trước đây tên "Sử thi" nay gọi là "Siêu hiếm".
 - **42 pet thường, 7 hệ** (Lửa, Băng, Sấm, Đá, Rừng, Bóng đêm, Thép), mỗi hệ 6 con: 14 Thường, 13 Hiếm, 10 Siêu hiếm, 5 Huyền thoại. Bản 5 thêm 14 con: Gà Chọi Lửa, Nhím Lửa, Hải Cẩu Băng, Thỏ Tuyết, Cá Đuối Sấm, Chuồn Chuồn Sấm, Cua Đá, Dê Núi Đá, Tắc Kè Hoa, Lợn Rừng, Bạch Tuộc Bóng Đêm, Nhện Trăng, Cá Mập Máy, Bọ Ngựa Thép.
 - **4 dạng tiến hóa** cho mỗi con: Non → Chiến binh → Đấu sĩ → Tối thượng, mỗi dạng một dáng riêng (bé con dễ thương → lớn dần → dạng thần). Cho ăn đủ thịt thì bấm Tiến hóa. Giá tiến hóa theo **thứ tự nở** (con nở càng muộn càng rẻ, nên con nở ngày 83 vẫn kịp lên dạng 4), con hiếm hơn đắt hơn chút. Mỗi con nở ra kèm quà thịt, nạp sẵn vào thanh tiến hóa, phần dư vào kho.
@@ -35,6 +35,13 @@ Lưu ý: trên iPhone, app ngoài màn hình chính và Safari giữ dữ liệu
 
 1. Mở địa chỉ trên bằng Chrome.
 2. Bấm menu ba chấm → **Cài đặt ứng dụng** (máy cũ ghi **Thêm vào màn hình chính**). Trong app cũng có nút **Cài app** ở Cài đặt.
+
+## Lên bản 6
+
+- Pet Sử thi **chưa có** giờ chỉ hiện **bóng đen** có viền sáng, tên là **???** ở mọi chỗ (thẻ "Hôm nay nổi bật", ô Sử thi trên vòng quay, bộ Sử thi, bộ sưu tập, thẻ quay ở màn Hôm nay). Vẫn thấy hệ (Lửa, Băng…) và nhãn Sử thi để đoán. Quay trúng thì màn lộ diện hiện bóng giữa cột sáng, lóe sáng xong mới ra hình màu và tên. Con đã có hiện bình thường ở mọi nơi.
+- Tab Pet: thanh **Trại / Vòng quay / Cửa hàng** dính ngay dưới thanh chỉ số khi cuộn, không còn bị hàng chip đè lên trên iPhone. Đổi tab phụ lúc đang cuộn sâu thì về đầu tab mới.
+
+Dữ liệu giữ nguyên, không cần làm gì.
 
 ## Lên bản 5
 
@@ -86,7 +93,7 @@ Quá 7 ngày chưa sao lưu, màn Hôm nay hiện một lời nhắc nhỏ. Bấ
 
 Khi có bản mới, cuối màn hình hiện thanh **Có bản mới, chạm để cập nhật**. Chạm vào là xong, dữ liệu giữ nguyên. Muốn kiểm tra ngay: Cài đặt → **Kiểm tra bản mới**.
 
-Cho người sửa code: sửa file nào cũng phải tăng `VERSION` trong `sw.js` (v4 → v5…) rồi mới đẩy lên. Thêm file mới thì thêm cả tên file vào danh sách `ASSETS` trong `sw.js`.
+Cho người sửa code: sửa file nào cũng phải tăng `VERSION` trong `sw.js` (v5 → v6…) rồi mới đẩy lên. Thêm file mới thì thêm cả tên file vào danh sách `ASSETS` trong `sw.js`.
 
 ## Hạn chế
 

@@ -24,6 +24,12 @@ function gachaSanitize(s) {
   s.gacha = g;
 }
 
+/* ----- Sử thi chưa có: chỉ hiện bóng (bản 6) -----
+   Con chưa sở hữu ở mọi chỗ chỉ là bóng đen viền sáng, tên "???", vẫn lộ hệ và nhãn Sử thi làm gợi ý.
+   Hình màu và tên chỉ hiện ở màn ra Sử thi (epicReveal) và sau khi đã có. aura = thêm quầng cầu vồng quay chậm sau bóng. */
+const EPIC_HIDDEN = 'Sử thi bí ẩn';
+const epicSil = (id, aura) => `<span class="ep-sil${aura ? ' aura' : ''}">${petSVG(id, 1, { sil: true })}</span>`;
+
 /* ----- Trạng thái ----- */
 const epicOwnedN = () => EPICS.filter(p => state.pets[p.id]).length;
 function featuredEpic() {
@@ -118,7 +124,7 @@ const gShort = r => ({ epic: () => PET_BY[r.id] ? PET_BY[r.id].name : 'Sử thi'
 
 /* ----- Hình cho ô thưởng ----- */
 function gSlotArt(k, feat) {
-  if (k === 'epic') return feat ? petSVG(feat.id, 1) : ic('chest');
+  if (k === 'epic') return feat ? epicSil(feat.id) : ic('chest');
   if (k === 'item') return GITEMS.some(x => !owned(x.id)) ? ic('gift') : ic('chest');
   if (k === 'shield') return ic('shield');
   if (k === 'x2') return `<span class="gx-x2">${ic('meat')}<b>x2</b></span>`;
@@ -168,8 +174,8 @@ function viewGacha(D) {
   // Con nổi bật
   if (feat) {
     const E = ELEMENTS[feat.el];
-    h += `<div class="card gx-head" style="--e1:${E.bg[0]};--e2:${E.bg[1]}"><div class="gx-feat"><div class="gx-feat-rays"></div>${petSVG(feat.id, 1)}</div>
-      <div class="gx-feat-t"><div class="sub">Hôm nay nổi bật</div><div class="gx-feat-n tout">${esc(feat.name)}</div>
+    h += `<div class="card gx-head" style="--e1:${E.bg[0]};--e2:${E.bg[1]}"><div class="gx-feat"><div class="gx-feat-rays"></div>${epicSil(feat.id, 1)}</div>
+      <div class="gx-feat-t"><div class="sub">Hôm nay nổi bật</div><div class="gx-feat-n tout"><span aria-hidden="true">???</span><span class="sr">${EPIC_HIDDEN}</span></div>
       <div class="gx-tags"><span class="tag-el" style="background:${E.c}">${E.n}</span>${rarTag(4)}</div>
       <div class="gx-rate">Tỷ lệ <b>${gPct('epic')}%</b> mỗi lượt · lượt thứ ${GA.pity} chắc chắn ra</div></div></div>`;
   } else {
@@ -205,7 +211,7 @@ function viewGacha(D) {
   h += `<div class="card gx-set"><div class="gx-set-h"><h3 class="h3" style="margin:0">Bộ Sử thi</h3><b>${own}/${EPICS.length}</b></div><div class="gx-set-row">`;
   EPICS.forEach(p => {
     const st = state.pets[p.id], qi = q.indexOf(p);
-    h += `<button class="gx-mini ${st ? 'own' : ''} ${qi === 0 ? 'now' : ''}" data-act="pet" data-id="${p.id}" aria-label="${st ? esc(p.name) : 'Pet Sử thi chưa có'}">${petSVG(p.id, st ? st.f : 1, { sil: !st })}${!st ? `<span class="gx-q">${qi === 0 ? 'Nay' : qi + 1}</span>` : ''}</button>`;
+    h += `<button class="gx-mini ${st ? 'own' : ''} ${qi === 0 ? 'now' : ''}" data-act="pet" data-id="${p.id}" aria-label="${st ? esc(p.name) : 'Pet Sử thi chưa có'}">${st ? petSVG(p.id, st.f) : epicSil(p.id)}${!st ? `<span class="gx-q">${qi === 0 ? 'Nay' : qi + 1}</span>` : ''}</button>`;
   });
   h += `</div><p class="note">${q.length ? `Con nổi bật đổi sau mỗi lượt quay, lần lượt qua các con chưa có (số trên hình là thứ tự). Quay hụt ${GA.pity - 1} lượt liền thì lượt sau chắc chắn ra, nên tối đa ${GA.pity * EPICS.length} lượt là đủ bộ.` : 'Đã đủ bộ. Từ giờ ô Sử thi ra Rương Sử thi.'}</p></div>`;
   // Lịch sử
@@ -219,7 +225,7 @@ function gachaTodayHTML(D, ds) {
   const s = spinStatus(ds, D), feat = featuredEpic();
   if (s.idx < 0) return '';
   if (s.spun) return `<div class="card gx-today done"><div class="gx-ti">${gResArt(s.rec)}</div><div><div class="h3" style="margin:0">Đã quay${ds === D.Y ? ' bù' : ''}: ${esc(gShort(s.rec))}</div><div class="sub">Mai xong hết mục và chốt ngày là có lượt mới.</div></div></div>`;
-  if (s.ok) return `<div class="card gx-today ready"><div class="gx-ti">${feat ? petSVG(feat.id, 1) : ic('chest')}</div><div style="flex:1"><div class="h3" style="margin:0">Mở lượt quay rồi!</div><div class="sub">${feat ? `Nổi bật: <b>${esc(feat.name)}</b> · ${gPct('epic')}%` : 'Ô Sử thi: Rương Sử thi'}</div>
+  if (s.ok) return `<div class="card gx-today ready"><div class="gx-ti">${feat ? epicSil(feat.id, 1) : ic('chest')}</div><div style="flex:1"><div class="h3" style="margin:0">Mở lượt quay rồi!</div><div class="sub">${feat ? `Nổi bật: <b>${EPIC_HIDDEN}</b> hệ ${ELEMENTS[feat.el].n} · ${gPct('epic')}%` : 'Ô Sử thi: Rương Sử thi'}</div>
     <button class="btn block gx-go" data-act="gx-open" style="margin-top:8px">${ic('wheel', 'i-btn')} QUAY THƯỞNG</button></div></div>`;
   if (!s.committed) return `<div class="gx-hint">${ic('wheel', 'i-in')} Xong hết mục (kể cả mục phụ) và chốt ngày để mở 1 lượt quay Sử thi.</div>`;
   return `<div class="card gx-today lock"><div class="gx-ti">${ic('lock')}</div><div><div class="h3" style="margin:0">Còn ${s.left.length} mục để mở lượt quay</div><div class="sub">${s.left.map(x => esc(x.t)).join(', ')}. Tích nốt ở trên là quay được.</div></div></div>`;
@@ -278,14 +284,15 @@ function gResultPop(out) {
   buzz(rar >= 2 ? [20, 40, 60] : 15); if (rar >= 2) fx.burst(rar >= 3 ? 120 : 60);
   announceAch(out.nb);
 }
-// Ra Sử thi: cột sáng cầu vồng, rung màn hình, pháo giấy, pet dạng 1 + tên chữ vàng
+// Ra Sử thi: cột sáng cầu vồng, rung màn hình, pháo giấy, pet dạng 1 + tên chữ vàng.
+// Bản 6: trong lúc cột sáng mọc, giữa màn là bóng đen của con vừa trúng; lóe sáng xong mới hiện hình màu và tên.
 function epicReveal(out) {
   const r = out.res, EP = r.id ? PET_BY[r.id] : null, E = EP ? ELEMENTS[EP.el] : null;
   const c = document.createElement('div'); c.className = 'epic-rev'; c.id = 'epic-rev';
   if (E) { c.style.setProperty('--e1', E.bg[0]); c.style.setProperty('--e2', E.bg[1]); }
   c.innerHTML = `<div class="er-rays"></div><div class="er-pillar"></div><div class="er-flash"></div>
     <div class="er-top"><div class="er-rar">SỬ THI</div></div>
-    <div class="er-pet" id="er-pet">${EP ? petSVG(EP.id, 1) : `<svg class="ic" viewBox="0 0 64 64">${ICONS.chest()}</svg>`}</div>
+    <div class="er-pet${EP ? ' er-two' : ''}" id="er-pet">${EP ? `<div class="er-sil">${epicSil(EP.id, 1)}</div><div class="er-col">${petSVG(EP.id, 1)}</div>` : `<svg class="ic" viewBox="0 0 64 64">${ICONS.chest()}</svg>`}</div>
     <div class="er-name tout">${EP ? esc(EP.name) : 'Rương Sử thi'}</div>
     <div class="er-sub">${EP ? `<span class="tag-el" style="background:${E.c}">${E.n}</span> ${rarTag(4)}` : ''}</div>
     <div class="er-gift">${EP ? `${esc(EP.intro)}<br>Quà ra mắt ${rwHTML(r.m, 0)}` : rwHTML(r.m, r.c)}</div>
