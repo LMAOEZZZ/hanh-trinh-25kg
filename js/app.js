@@ -19,7 +19,7 @@ const rwHTML = (m, c) => [m ? `+${M_(m)}` : '', c ? `+${C_(c)}` : ''].filter(Boo
 
 /* ===================== TRẠNG THÁI ===================== */
 const LS_KEY = 'hanh-trinh-25kg-v1';
-const blank = () => ({ v: 2, startDate: todayStr(), startWeight: 94.5, days: {}, w: {}, coins: 0, food: 0, pets: {}, own: {}, decor: {}, ach: {}, rw: {}, bonus: {}, seen: {}, sel: null, updatedAt: 0 });
+const blank = () => ({ v: 2, startDate: todayStr(), startWeight: 94.5, days: {}, w: {}, coins: 0, food: 0, pets: {}, own: {}, decor: {}, ach: {}, rw: {}, bonus: {}, seen: {}, sel: null, gacha: GACHA_BLANK(), updatedAt: 0 });
 let state = blank();
 function migrate(o) {
   const s = Object.assign(blank(), o && typeof o === 'object' ? o : {});
@@ -36,6 +36,8 @@ function migrate(o) {
     if (!p.eq || typeof p.eq !== 'object') p.eq = {};
   });
   if (s.sel && !s.pets[s.sel]) s.sel = null;
+  // Bản 4: vòng quay bắt đầu từ 0 cho dữ liệu cũ; đồ độc quyền chỉ giữ món có thật
+  gachaSanitize(s);
   s.v = 2;
   return s;
 }
@@ -210,10 +212,13 @@ function derive() {
       let cb = false;
       if (r.streak === 0) { r.runStart = d; if (hadBreak) { r.comeback = true; cb = true; hadBreak = false; } }
       r.streak++; prog++;
-      if (prog >= 7) { prog = 0; r.shields = Math.min(2, r.shields + 1); }
+      if (prog >= 7) { prog = 0; r.shields = Math.max(r.shields, Math.min(2, r.shields + 1)); }
       const wk = Math.floor(i / 7) + 1; r.week[wk] = (r.week[wk] || 0) + 1;
       if (dayInfo(d).refeed) r.cnt.refeed++;
       r.commitLog.push({ ds: d, streak: r.streak, runStart: r.runStart, comeback: cb });
+      // Khiên trúng từ vòng quay của ngày này (tối đa GA.shieldCap)
+      const gr = state.gacha && state.gacha.days[d];
+      if (gr && gr.k === 'shield') r.shields = Math.min(GA.shieldCap, r.shields + 1);
     } else if (d !== T && d !== Y) {
       if (r.streak > 0 && r.shields > 0) { r.shields--; r.shieldDays[d] = 1; }
       else { if (r.streak > 0) hadBreak = true; r.missDays[d] = 1; r.streak = 0; prog = 0; r.runStart = null; }
@@ -228,14 +233,14 @@ function derive() {
   r.latestDate = wds[wds.length - 1] || null;
   r.latest = r.latestDate ? state.w[r.latestDate] : null;
   r.lost = r.latest != null ? Math.max(0, +(state.startWeight - r.latest).toFixed(1)) : 0;
-  r.pets = Object.keys(state.pets).length;
+  r.pets = PETS.filter(p => state.pets[p.id]).length; // chỉ đếm 28 pet thường (thành tựu Mở N pet)
   return r;
 }
 
 /* ===================== KINH TẾ ===================== */
 const owned = id => !!(state.own[id] || state.decor[id]);
 function achMetric(kind, D) {
-  const P = Object.values(state.pets);
+  const P = PETS.map(p => state.pets[p.id]).filter(Boolean);
   switch (kind) {
     case 'total': return D.total; case 'streak': return D.best;
     case 'lift': case 'heavy': case 'abs': case 'water': case 'food': case 'steps': case 'measure': case 'refeed': return D.cnt[kind];
@@ -247,6 +252,8 @@ function achMetric(kind, D) {
     case 'decor': return SHOP.filter(x => x.cat === 'decor' && owned(x.id)).length;
     case 'kg': return D.lost; case 'perfectweek': return D.perfectWeek ? 1 : 0; case 'comeback': return D.comeback ? 1 : 0;
     case 'weighrun': return D.runWeigh; case 'sleeprun': return D.runSleep;
+    case 'spin': return state.gacha.n; case 'spinrun': return spinRun(); case 'epic': return epicOwnedN();
+    case 'ep4': return EPICS.filter(p => state.pets[p.id] && state.pets[p.id].f >= 4).length;
   }
   return 0;
 }
@@ -265,8 +272,9 @@ function announceAch(list) { list.forEach((a, i) => setTimeout(() => toast(`${ic
 function rewardItem(ds, k) {
   const R = state.rw[ds] = state.rw[ds] || {};
   if (R[k]) return null;
-  R[k] = 1; state.food += ECON.item.meat; state.coins += ECON.item.coin;
-  return [ECON.item.meat, ECON.item.coin];
+  const m = ECON.item.meat * meatMult(ds);
+  R[k] = 1; state.food += m; state.coins += ECON.item.coin;
+  return [m, ECON.item.coin];
 }
 // Mở pet theo tổng ngày đã chốt; pet mới nở kèm thịt nạp sẵn
 function syncPets(D) {
@@ -293,7 +301,7 @@ function renderTop(D) {
   </div>`;
 }
 function renderNav() {
-  const unseen = PETS.some(p => state.pets[p.id] && !state.seen[p.id]);
+  const unseen = ALL_PETS.some(p => state.pets[p.id] && !state.seen[p.id]) || hasSpin();
   $('#nav').innerHTML = `<div class="bar-in">${TABS.map(t => `<button class="nb" data-act="nav" data-tab="${t}" ${ui.tab === t ? 'aria-current="page"' : ''}>${NAV_ICONS[t]()}${t === 'pets' && unseen ? '<span class="dot"></span>' : ''}<span>${TAB_NAME[t]}</span></button>`).join('')}</div>`;
 }
 function render() {
@@ -326,18 +334,20 @@ function viewToday(D) {
   const items = itemsFor(ds), mains = items.filter(x => x.main), doneN = items.filter(x => itemDone(ds, x.k)).length;
   const leftMain = mains.filter(x => !itemDone(ds, x.k)).length, pct = Math.round(doneN / items.length * 100);
   const after = I.idx >= PLAN_DAYS;
-  h += `<section class="hero"><div class="pills">${after ? '<span class="pill">Sau 12 tuần</span>' : `<span class="pill">Tuần ${I.week}</span>`}<span class="pill ${I.cls}">${I.type}${I.train ? ' · ' + I.session.code : ''}</span></div>
+  h += `<section class="hero"><div class="pills">${after ? '<span class="pill">Sau 12 tuần</span>' : `<span class="pill">Tuần ${I.week}</span>`}<span class="pill ${I.cls}">${I.type}${I.train ? ' · ' + I.session.code : ''}</span>${x2Of(ds) ? `<span class="pill x2">${ic('meat', 'i-in')} Thịt x${meatMult(ds)}</span>` : ''}</div>
     <div class="daynum tout">Ngày ${I.idx + 1}${after ? '' : '<small>/84</small>'}</div><div class="date">${ui.back ? 'Hôm qua · ' : ''}${fmtFull(ds)}</div></section>`;
   h += `<div class="card quote"><button class="qpet" data-act="go-pet" aria-label="Xem pet">${petMini()}</button><div><div class="bubble" id="qtext">${esc(quoteFor(ds, D))}</div>
     <div class="q-actions"><span class="sub">Câu hôm nay</span><button class="btn sm ghost" data-act="qnext">${ic('dice', 'i-btn')} Đổi câu</button></div></div></div>`;
-  if (ui.back) h += `<div class="card banner info" style="margin-top:14px"><p>Đang chốt bù cho hôm qua.</p><button class="btn sm" data-act="back-off">Về hôm nay</button></div>`;
+  if (ui.back) h += `<div class="card banner info" style="margin-top:14px"><p>${isCommitted(D.Y) ? 'Đang xem hôm qua. Tích nốt mục phụ để mở lượt quay bù.' : 'Đang chốt bù cho hôm qua.'}</p><button class="btn sm" data-act="back-off">Về hôm nay</button></div>`;
+  else if (spinStatus(D.Y, D).ok) h += `<div class="card banner gx-banner" style="margin-top:14px"><p>Hôm qua còn 1 lượt quay bù.</p><button class="btn sm" data-act="gx-open">${ic('wheel', 'i-btn')} Quay bù</button></div>`;
   else if (diff(state.startDate, D.Y) >= 0 && !isCommitted(D.Y) && !D.shieldDays[D.Y]) h += `<div class="card banner" style="margin-top:14px"><p>Hôm qua chưa chốt. Còn kịp chốt bù tới hết hôm nay.</p><button class="btn sm" data-act="back-on">Chốt bù</button></div>`;
   if (after && !ui.back) h += `<div class="card" style="margin-top:14px;background:linear-gradient(160deg,#ffb21f,#ff4d6a)"><div class="h2 tout">Đã qua 84 ngày!</div><p style="margin:6px 0 0;font-weight:700">Đừng quay lại ăn như cũ ngay. 3–4 tuần tới, mỗi tuần thêm ~150–200 kcal, chủ yếu bằng cơm (~120–150 g cơm chín), tới khi cân đứng yên. Vẫn cân đồ ăn và cân mỗi sáng.</p></div>`;
   if (done) {
     h += `<div class="card stamp" style="margin-top:14px"><div class="ic-big">${ic('trophy')}</div><div><div class="big">Đã chốt ngày ${I.idx + 1}</div><div style="font-weight:700">Thịt và xu đã vào túi. Mai chiến tiếp.</div></div></div>`;
+    h += gachaTodayHTML(D, ds);
   } else {
     h += `<div class="card" style="margin-top:14px"><div class="prog"><div class="bar ${pct >= 100 ? 'full' : ''}"><i style="width:${pct}%"></i></div><div class="pct tout-s">${pct}%</div></div>
-      <p class="prog-note">${doneN}/${items.length} mục xong${leftMain ? ` · còn ${leftMain} mục chính trước khi chốt` : ' · đủ mục chính, chốt được rồi!'} · mỗi mục ${rwHTML(ECON.item.meat, ECON.item.coin)}</p></div>`;
+      <p class="prog-note">${doneN}/${items.length} mục xong${leftMain ? ` · còn ${leftMain} mục chính trước khi chốt` : ' · đủ mục chính, chốt được rồi!'} · mỗi mục ${rwHTML(ECON.item.meat * meatMult(ds), ECON.item.coin)}</p>${gachaTodayHTML(D, ds)}</div>`;
   }
   h += `<ul class="list">${items.map(x => itemHTML(ds, I, day, x, done)).join('')}</ul>`;
   h += `<div class="commit-wrap">`;
@@ -351,7 +361,7 @@ function itemHTML(ds, I, day, x, locked) {
   let right = '';
   if (x.k !== 'weigh') {
     const skip = x.k === 'heavy' && day.it && day.it.heavy === 'skip';
-    right = `<button class="chk ${ok ? 'on' : ''} ${skip ? 'skip' : ''}" id="chk-${x.k}" data-act="toggle" data-k="${x.k}" aria-pressed="${ok}" aria-label="${esc(x.t)}: ${ok ? 'đã xong' : 'chưa xong'}" ${locked ? 'disabled' : ''}>${skip ? 'Bỏ' : CHECK}</button>`;
+    right = `<button class="chk ${ok ? 'on' : ''} ${skip ? 'skip' : ''}" id="chk-${x.k}" data-act="toggle" data-k="${x.k}" aria-pressed="${ok}" aria-label="${esc(x.t)}: ${ok ? 'đã xong' : 'chưa xong'}" ${locked && (x.main || state.gacha.days[ds]) ? 'disabled' : ''}>${skip ? 'Bỏ' : CHECK}</button>`;
   }
   let body = `<li class="item ${ok ? 'done' : ''} ${x.main ? '' : 'phu'}"><div class="it-row"><div class="it-ic" aria-hidden="true">${ic(x.ic)}</div><div class="it-txt"><div class="it-t">${esc(x.t)}</div><div class="it-s">${esc(x.sub)}</div></div>${right}</div>`;
   if (x.k === 'weigh') {
@@ -455,14 +465,14 @@ function viewCal(D) {
     <div class="tile hot"><div class="k">Chuỗi hiện tại</div><div class="v tout-s">${ic('fire', 'i-v')}${D.streak}</div></div>
     <div class="tile"><div class="k">Chuỗi dài nhất</div><div class="v">${D.best}</div></div>
     <div class="tile"><div class="k">Ngày đã chốt</div><div class="v">${D.total}<small>/84</small></div></div>
-    <div class="tile"><div class="k">Khiên giữ chuỗi</div><div class="v">${ic('shield', 'i-v')}${D.shields}<small>/2</small></div></div>
+    <div class="tile"><div class="k">Khiên giữ chuỗi</div><div class="v">${ic('shield', 'i-v')}${D.shields}<small>/${D.shields > 2 ? GA.shieldCap : 2}</small></div></div>
   </div>
   <div class="card" style="margin-top:14px">
     <div class="cal-head"><button class="icon-btn" data-act="calprev" aria-label="Tháng trước">${ic('arrowL')}</button><h3 class="h3" style="margin:0">Tháng ${m + 1}/${y}</h3><button class="icon-btn" data-act="calnext" aria-label="Tháng sau">${ic('arrowR')}</button></div>
     <div class="cal-grid">${cells}</div>
     <div class="legend"><span><i style="background:#ffc21f"></i>Đã chốt</span><span><i style="background:#2fb8e8"></i>Khiên đỡ</span><span><i style="background:#ff8a1f"></i>Chốt bù được</span><span><i class="dash" style="background:#2a1f63"></i>Bỏ lỡ</span><span>${ic('rice', 'i-in')} Ngày ăn nhiều</span></div>
   </div>
-  <div class="card"><h3 class="h3">Cách giữ chuỗi</h3><p class="sub" style="margin:0">Chốt đủ 7 ngày liền được 1 khiên, giữ tối đa 2. Lỡ một ngày thì khiên tự đỡ, chuỗi không gãy. Quên chốt thì vẫn chốt bù được cho hôm qua, chỉ hôm qua thôi. Bỏ lỡ ngày không bị trừ gì, pet không bị sao.</p></div>
+  <div class="card"><h3 class="h3">Cách giữ chuỗi</h3><p class="sub" style="margin:0">Chốt đủ 7 ngày liền được 1 khiên, giữ tối đa 2 (trúng khiên ở vòng quay thì giữ được tới ${GA.shieldCap}). Lỡ một ngày thì khiên tự đỡ, chuỗi không gãy. Quên chốt thì vẫn chốt bù được cho hôm qua, chỉ hôm qua thôi. Bỏ lỡ ngày không bị trừ gì, pet không bị sao.</p></div>
   <div class="card"><h3 class="h3">Mốc cân theo kế hoạch</h3>
     ${miles.map(([i, v, t]) => `<div class="mile"><span class="w">${t}</span><span class="sub">${fmtDM(addDays(S, i - 1))}</span><span class="kg">~${fkg(v)} kg</span></div>`).join('')}
     <div class="mile"><span class="w" style="color:var(--red)">Trần</span><span class="sub">Giảm 25 kg, chỉ khi mọi thứ thuận lợi</span><span class="kg">${fkg(sw - 25)} kg</span></div>
@@ -471,26 +481,30 @@ function viewCal(D) {
 
 /* ----- Pet: trại chung, bộ sưu tập, cửa hàng ----- */
 function viewPets(D) {
-  let h = `<section class="hero"><div><div class="daynum tout" style="font-size:38px">Trại pet</div><div class="date">${D.pets}/28 pet · cứ 3 ngày chốt mở thêm một con</div></div></section>
-  <div class="seg" role="tablist"><button role="tab" data-act="pview" data-v="camp" aria-selected="${ui.petView === 'camp'}">${ic('paw', 'i-btn')} Trại & bộ sưu tập</button><button role="tab" data-act="pview" data-v="shop" aria-selected="${ui.petView === 'shop'}">${ic('bag', 'i-btn')} Cửa hàng</button></div>`;
+  const ne = epicOwnedN(), spin = hasSpin(D);
+  let h = `<section class="hero"><div><div class="daynum tout" style="font-size:38px">Trại pet</div><div class="date">${D.pets}/28 pet · ${ne}/${EPICS.length} Sử thi · cứ 3 ngày chốt mở thêm một con</div></div></section>
+  <div class="seg three" role="tablist"><button role="tab" data-act="pview" data-v="camp" aria-selected="${ui.petView === 'camp'}">${ic('paw', 'i-btn')} Trại</button><button role="tab" data-act="pview" data-v="gacha" aria-selected="${ui.petView === 'gacha'}">${ic('wheel', 'i-btn')} Vòng quay${spin ? '<span class="seg-dot"></span>' : ''}</button><button role="tab" data-act="pview" data-v="shop" aria-selected="${ui.petView === 'shop'}">${ic('bag', 'i-btn')} Cửa hàng</button></div>`;
   if (ui.petView === 'shop') return h + viewShop(D);
+  if (ui.petView === 'gacha') return h + viewGacha(D);
   h += `<div class="card scene">${campSVG(D)}<div class="scene-hud"><span class="chip">${ic('meat', 'e')}${state.food}</span><span class="chip">${ic('coin', 'e')}${state.coins}</span></div></div>
     <p class="sub" style="margin:8px 2px 0;text-align:center">${D.total ? 'Chạm vào pet trong trại để xem, cho ăn, thay đồ' : 'Chốt ngày đầu tiên để nở trứng'}</p>`;
+  if (spin) h += `<div class="card banner gx-banner" style="margin-top:12px"><p>Có lượt quay Sử thi đang chờ.</p><button class="btn sm" data-act="pview" data-v="gacha">${ic('wheel', 'i-btn')} Quay</button></div>`;
   const next = PETS.find(p => !state.pets[p.id]);
   if (next) h += `<div class="card nextpet"><div class="np-sil">${petSVG(next.id, 1, { sil: true })}</div><div><div class="h3" style="margin:0">Pet tiếp theo</div><div class="sub">${ELEMENTS[next.el].n} · ${RARITY[next.rar].n} · mở khi chốt đủ <b>${next.need}</b> ngày (còn ${next.need - D.total})</div></div></div>`;
-  h += `<h3 class="h2 tout" style="margin:20px 2px 10px">Bộ sưu tập <span class="sub" style="text-shadow:none">${D.pets}/28</span></h3><div class="pet-grid">`;
-  PETS.forEach(p => {
+  const card = p => {
     const st = state.pets[p.id], E = ELEMENTS[p.el], R = RARITY[p.rar];
-    h += `<button class="pcard ${st ? 'f' + st.f : 'locked'}" data-act="pet" data-id="${p.id}" style="--e1:${E.bg[0]};--e2:${E.bg[1]}" aria-label="${st ? esc(p.name) : 'Pet chưa mở'}">
+    return `<button class="pcard ${st ? 'f' + st.f : 'locked'}${p.epic ? ' epic' : ''}" data-act="pet" data-id="${p.id}" style="--e1:${E.bg[0]};--e2:${E.bg[1]}" aria-label="${st ? esc(p.name) : 'Pet chưa mở'}">
       ${st && !state.seen[p.id] ? '<span class="new">Mới</span>' : ''}
       <span class="pc-art" data-lazy="${p.id}|${st ? st.f : 1}|${st ? 0 : 1}"></span>
-      ${st ? '' : `<span class="need">Ngày ${p.need}</span>`}
+      ${st ? '' : `<span class="need">${p.epic ? 'Vòng quay' : `Ngày ${p.need}`}</span>`}
       <span class="pn">${st ? esc(p.name) : '???'}</span>
-      <span class="pmeta"><span class="rar" style="background:${R.c}">${R.n}</span></span>
+      <span class="pmeta"><span class="rar${R.epic ? ' epic-tag' : ''}" style="background:${R.c}">${R.n}</span></span>
       ${st ? `<span class="pips" aria-label="Dạng ${st.f}">${[1, 2, 3, 4].map(f => `<i class="${f <= st.f ? 'on' : ''}"></i>`).join('')}</span>` : `<span class="sub" style="font-size:12px">${ELEMENTS[p.el].n}</span>`}
     </button>`;
-  });
-  return h + `</div>`;
+  };
+  h += `<h3 class="h2 tout" style="margin:20px 2px 10px">Sử thi <span class="sub" style="text-shadow:none">${ne}/${EPICS.length} · chỉ có từ vòng quay</span></h3><div class="pet-grid epic-grid">${EPICS.map(card).join('')}</div>`;
+  h += `<h3 class="h2 tout" style="margin:20px 2px 10px">Bộ sưu tập <span class="sub" style="text-shadow:none">${D.pets}/28</span></h3><div class="pet-grid">${PETS.map(card).join('')}</div>`;
+  return h;
 }
 // Dựng SVG pet khi ô hiện ra
 let lazyObs = null;
@@ -536,15 +550,15 @@ function openPet(id) {
 function closePet() { const el = $('#petview'); if (el) el.remove(); ui.pet = null; if (ui.tab === 'pets') render(); }
 function renderPetView(first) {
   const el = $('#petview'), id = ui.pet; if (!el || !id) return;
-  const p = PET_BY[id], st = state.pets[id], E = ELEMENTS[p.el], R = RARITY[p.rar];
-  const cost = st.f < 4 ? evoCost(p.i, st.f) : 0, ready = st.f < 4 && st.m >= cost;
+  const p = PET_BY[id], st = state.pets[id], E = ELEMENTS[p.el];
+  const cost = st.f < 4 ? costOf(id, st.f) : 0, ready = st.f < 4 && st.m >= cost;
   const scroll = el.scrollTop;
-  let h = `<div class="pv-scene" style="--e1:${E.bg[0]};--e2:${E.bg[1]}">${sceneSVG(id)}<div class="pv-pet" id="pv-pet">${petSVG(id, st.f, { eq: st.eq })}</div>
+  let h = `<div class="pv-scene${p.epic ? ' epic' : ''}" style="--e1:${E.bg[0]};--e2:${E.bg[1]}">${sceneSVG(id)}${p.epic ? '<div class="pv-epic-rays"></div>' : ''}<div class="pv-pet" id="pv-pet">${petSVG(id, st.f, { eq: st.eq })}</div>
     <button class="icon-btn pv-x" data-act="pet-close" aria-label="Đóng">${ic('close')}</button>
-    <div class="pv-tags"><span class="tag-el" style="background:${E.c}">${E.n}</span><span class="tag-el" style="background:${R.c}">${R.n}</span></div>
+    <div class="pv-tags"><span class="tag-el" style="background:${E.c}">${E.n}</span>${rarTag(p.rar)}</div>
     <div class="pv-place">${esc(SCENE_NAME[id])}</div></div>
   <div class="pv-body">
-    <div class="pv-name"><h2 class="tout">${esc(p.name)}</h2><span class="pv-form">Dạng ${st.f} · ${FORM_NAME[st.f]}</span></div>
+    <div class="pv-name"><h2 class="tout${p.epic ? ' epic-name' : ''}">${esc(p.name)}</h2><span class="pv-form">Dạng ${st.f} · ${FORM_NAME[st.f]}</span></div>
     <p class="pv-intro">${esc(p.intro)}</p>
     <div class="ftrack">${[1, 2, 3, 4].map(f => `<div class="ft ${f === st.f ? 'cur' : f < st.f ? 'past' : 'next'}">${petSVG(id, f, { sil: f > st.f })}<span>${f}</span></div>${f < 4 ? `<i class="ft-ar">${ic('arrowR')}</i>` : ''}`).join('')}</div>`;
   if (st.f < 4) {
@@ -557,9 +571,9 @@ function renderPetView(first) {
   } else h += `<div class="card evo-card max"><div class="evo-top"><span>${ic('star', 'i-in')} Đã đạt dạng tối thượng</span></div><p class="sub" style="margin:4px 0 0">Thịt dư để dành cho pet khác.</p></div>`;
   // Tủ đồ
   const slots = ['head', 'eyes', 'neck', 'back', 'body', 'fx'];
-  const items = SHOP.filter(x => x.slot === ui.slot && owned(x.id));
+  const items = WEARABLES.filter(x => x.slot === ui.slot && owned(x.id));
   h += `<h3 class="h3" style="margin:16px 2px 8px">Tủ đồ</h3><div class="seg small slots">${slots.map(s => `<button data-act="slot" data-s="${s}" aria-selected="${ui.slot === s}">${SLOT_NAME[s]}${st.eq[s] ? '<i class="dot-on"></i>' : ''}</button>`).join('')}</div>
-    <div class="wardrobe">${items.length ? items.map(x => `<button class="wd-item ${st.eq[x.slot] === x.id ? 'on' : ''}" data-act="equip" data-pet="${id}" data-slot="${x.slot}" data-id="${x.id}" aria-pressed="${st.eq[x.slot] === x.id}">${shopIcon(x.id)}<span>${esc(x.n)}</span></button>`).join('')
+    <div class="wardrobe">${items.length ? items.map(x => `<button class="wd-item ${st.eq[x.slot] === x.id ? 'on' : ''}" data-act="equip" data-pet="${id}" data-slot="${x.slot}" data-id="${x.id}" aria-pressed="${st.eq[x.slot] === x.id}">${shopIcon(x.id)}<span>${esc(x.n)}</span>${x.gacha ? '<i class="wd-g"></i>' : ''}</button>`).join('')
       : `<div class="wd-empty"><span class="sub">Chưa có món ${SLOT_NAME[ui.slot].toLowerCase()} nào.</span><button class="btn sm" data-act="to-shop" data-c="${ui.slot === 'fx' ? 'fx' : 'wear'}">${ic('bag', 'i-btn')} Tới cửa hàng</button></div>`}</div>
     <p class="sub" style="margin:10px 2px 0">Chạm món đang mặc để cởi ra.</p></div>`;
   el.innerHTML = h;
@@ -568,8 +582,16 @@ function renderPetView(first) {
 }
 function openLockedPet(id) {
   const p = PET_BY[id], D = derive(), E = ELEMENTS[p.el];
+  if (p.epic) {
+    const q = epicQueue(), k = q.indexOf(p);
+    openModal(`<h2>Pet Sử thi bí ẩn</h2><div style="display:flex;justify-content:center"><div style="width:180px">${petSVG(id, 1, { sil: true })}</div></div>
+      <p style="text-align:center;margin:4px 0"><span class="tag-el" style="background:${E.c}">${E.n}</span> ${rarTag(4)}</p>
+      <p style="text-align:center">Chỉ có từ <b>vòng quay</b>. ${k === 0 ? 'Đang là con <b>nổi bật</b> ở lượt quay tới.' : `Sẽ nổi bật sau <b>${k}</b> lượt quay nữa (nếu chưa ra con khác trước).`}</p>
+      <button class="btn block" data-act="gx-open">${ic('wheel', 'i-btn')} Tới vòng quay</button>`);
+    return;
+  }
   openModal(`<h2>Pet bí ẩn</h2><div style="display:flex;justify-content:center"><div style="width:180px">${petSVG(id, 1, { sil: true })}</div></div>
-    <p style="text-align:center;margin:4px 0"><span class="tag-el" style="background:${E.c}">${E.n}</span> <span class="tag-el" style="background:${RARITY[p.rar].c}">${RARITY[p.rar].n}</span></p>
+    <p style="text-align:center;margin:4px 0"><span class="tag-el" style="background:${E.c}">${E.n}</span> ${rarTag(p.rar)}</p>
     <p style="text-align:center">Mở khi chốt đủ <b>${p.need}</b> ngày. Còn <b>${p.need - D.total}</b> ngày nữa.</p>`);
 }
 
@@ -684,7 +706,10 @@ function openAch(id) {
 /* ===================== HÀNH ĐỘNG ===================== */
 function toggleItem(k) {
   const D = derive(), ds = ui.back ? D.Y : D.T;
-  if (isCommitted(ds)) return;
+  // Ngày đã chốt: mục chính khóa, mục phụ vẫn tích được (để đủ hết mục, mở lượt quay)
+  const it = itemsFor(ds).find(x => x.k === k);
+  if (!it || (isCommitted(ds) && it.main)) return;
+  if (isCommitted(ds) && state.gacha.days[ds]) return;
   const day = getDay(ds);
   day.it[k] = day.it[k] === true || day.it[k] === 'skip' ? false : true;
   const rw = day.it[k] ? rewardItem(ds, k) : null;
@@ -693,7 +718,7 @@ function toggleItem(k) {
   if (rw) floatReward('#chk-' + k, rw[0], rw[1]);
   if (day.it[k]) buzz(12);
   const left = itemsFor(ds).filter(x => x.main && !itemDone(ds, x.k)).length;
-  if (day.it[k] && left === 0) { const b = $('.btn-commit'); if (b) b.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' }); }
+  if (day.it[k] && left === 0) { const b = $('.btn-commit') || $('.gx-today.ready'); if (b) b.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' }); }
 }
 function floatReward(sel, m, c) {
   const b = $(sel); if (!b) return;
@@ -709,7 +734,7 @@ function saveWeight(ds, inputId) {
   const v = Math.round(parseFloat(raw) * 10) / 10;
   if (!(v >= 40 && v <= 200)) { toast('Số cân phải nằm trong khoảng 40–200 kg'); return; }
   state.w[ds] = v;
-  const rw = diff(state.startDate, ds) >= 0 && !isCommitted(ds) ? rewardItem(ds, 'weigh') : null;
+  const D0 = derive(), rw = diff(state.startDate, ds) >= 0 && (ds === D0.T || ds === D0.Y) ? rewardItem(ds, 'weigh') : null;
   const nb = checkAch(); persist(); render(); announceAch(nb);
   toast(`Đã lưu ${fkg(v)} kg${rw ? ' · ' + rwHTML(rw[0], rw[1]) : ''}`);
 }
@@ -720,7 +745,7 @@ function commitDay() {
   const day = getDay(ds); day.done = Date.now();
   const R = state.rw[ds] = state.rw[ds] || {};
   const rewards = [];
-  if (!R.c) { R.c = 1; state.food += ECON.commit.meat; state.coins += ECON.commit.coin; rewards.push(rwHTML(ECON.commit.meat, ECON.commit.coin)); }
+  if (!R.c) { const cm = ECON.commit.meat * meatMult(ds); R.c = 1; state.food += cm; state.coins += ECON.commit.coin; rewards.push(rwHTML(cm, ECON.commit.coin)); }
   const after = derive();
   const log = after.commitLog.find(c => c.ds === ds);
   if (log) {
@@ -733,11 +758,11 @@ function commitDay() {
   persist();
   const wasBack = ui.back; ui.back = false;
   render();
-  celebrate({ dayNum: diff(state.startDate, ds) + 1, back: wasBack, streak: after.streak, rewards, newPets, badges: nb, first: before.total === 0 });
+  celebrate({ dayNum: diff(state.startDate, ds) + 1, back: wasBack, streak: after.streak, rewards, newPets, badges: nb, first: before.total === 0, spin: spinStatus(ds).ok, spinLeft: spinStatus(ds).left.length });
 }
 function feedPet(id, n) {
   const p = PET_BY[id], st = state.pets[id]; if (!st || st.f >= 4 || state.food < 1) return;
-  const need = evoCost(p.i, st.f) - st.m; if (need <= 0) return;
+  const need = costOf(id, st.f) - st.m; if (need <= 0) return;
   const amt = Math.min(state.food, need, n === 'all' ? need : 5);
   state.food -= amt; st.m += amt;
   persist(); renderTop(derive()); renderPetView();
@@ -746,7 +771,7 @@ function feedPet(id, n) {
 }
 function evolvePet(id) {
   const p = PET_BY[id], st = state.pets[id]; if (!st || st.f >= 4) return;
-  const cost = evoCost(p.i, st.f); if (st.m < cost) return;
+  const cost = costOf(id, st.f); if (st.m < cost) return;
   const from = st.f; st.f++; st.m = 0;
   const nb = checkAch(); persist();
   evoAnim(id, from, st.f, nb);
@@ -773,7 +798,7 @@ function evoAnim(id, from, to, nb) {
   }, T);
 }
 function buyItem(id) {
-  const x = SHOP_BY[id]; if (!x || owned(id) || state.coins < x.p) return;
+  const x = SHOP_BY[id]; if (!x || x.gacha || owned(id) || state.coins < x.p) return;
   state.coins -= x.p;
   let msg = `Đã mua ${esc(x.n)}`;
   if (x.cat === 'decor') { state.decor[id] = { on: 1 }; msg += ' và đặt vào trại'; }
@@ -840,7 +865,7 @@ function openSettings() {
     <h3>Cập nhật</h3><p class="sub" style="margin:0">Phiên bản <b id="app-ver">…</b>. Khi có bản mới, app hiện thông báo nhỏ ở cuối màn hình.</p>
     ${'serviceWorker' in navigator ? `<button class="btn sm ghost" style="margin-top:8px" data-act="check-upd">Kiểm tra bản mới</button>` : ''}
     <h3>Xóa dữ liệu</h3><div id="rst"><button class="btn sm red" data-act="reset-ask">Xóa toàn bộ dữ liệu</button></div>
-    <p class="sub" style="margin-top:14px">Hành trình −25kg · ${PLAN_DAYS} ngày · ${PETS.length} pet × 4 dạng · ${ACH.length} thành tựu · ${SHOP.length} món đồ</p>`);
+    <p class="sub" style="margin-top:14px">Hành trình −25kg · ${PLAN_DAYS} ngày · ${PETS.length} pet + ${EPICS.length} Sử thi × 4 dạng · ${ACH.length} thành tựu · ${SHOP.length + GITEMS.length} món đồ</p>`);
   appVersion().then(v => { const el = $('#app-ver'); if (el) el.textContent = v; });
 }
 const isStandalone = () => { try { return matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true; } catch (e) { return false; } };
@@ -926,7 +951,8 @@ function celebrate(o) {
     ${lp ? `<div class="newpet popin" style="width:150px">${petSVG(lp, state.pets[lp].f, { eq: state.pets[lp].eq })}</div><div class="cs tout-s">${esc(PET_BY[lp].name)} đang chờ được cho ăn</div>` : ''}
     ${Q_STREAK[o.streak] ? `<div class="bubble" style="max-width:320px">${esc(Q_STREAK[o.streak])}</div>` : ''}
     ${o.badges.length ? `<div class="rew small">${o.badges.map(a => `<span>${ic(ACH_GLYPH[a.kind] || 'star', 'i-in')} ${esc(a.name)}</span>`).join('')}</div>` : ''}
-    <button class="btn" data-act="cele-close">${np ? 'Xem pet' : 'Ngon!'}</button>`;
+    ${o.spin ? `<button class="btn gx-go" data-act="cele-spin">${ic('wheel', 'i-btn')} Quay thưởng ngay</button>` : o.spinLeft ? `<div class="sub" style="color:#fff">Tích nốt ${o.spinLeft} mục phụ là mở lượt quay Sử thi.</div>` : ''}
+    <button class="btn ${o.spin ? 'ghost' : ''}" data-act="cele-close">${np ? 'Xem pet' : 'Ngon!'}</button>`;
   document.body.appendChild(c); flushCel();
   c.querySelector('.btn').focus({ preventScroll: true });
   buzz([30, 50, 90]); fx.burst(160);
@@ -975,7 +1001,7 @@ const fx = {
 /* ===================== SỰ KIỆN ===================== */
 function go(tab) {
   if (!TABS.includes(tab)) tab = 'today';
-  ui.tab = tab; closeModal(); if (ui.pet) { const el = $('#petview'); if (el) el.remove(); ui.pet = null; }
+  ui.tab = tab; closeModal(); closeGacha(); if (ui.pet) { const el = $('#petview'); if (el) el.remove(); ui.pet = null; }
   try { if (location.hash !== '#' + tab) history.replaceState(null, '', '#' + tab); } catch (e) { }
   render(); window.scrollTo(0, 0);
 }
@@ -1001,6 +1027,13 @@ document.addEventListener('click', e => {
     case 'settings': openSettings(); break;
     case 'close': closeModal(); break;
     case 'cele-close': { const c = $('#cele'), id = c && c.dataset.goPet; if (c) c.remove(); if (id) { go('pets'); openPet(id); } break; }
+    case 'cele-spin': { const c = $('#cele'); if (c) c.remove(); ui.petView = 'gacha'; go('pets'); break; }
+    case 'gx-open': closeModal(); ui.petView = 'gacha'; go('pets'); break;
+    case 'spin': runSpin(b.dataset.date); break;
+    case 'gx-close': closeGacha(); render(); break;
+    case 'gx-see': { const id = b.dataset.id; closeGacha(); ui.petView = 'camp'; go('pets'); openPet(id); break; }
+    case 'gx-wear': { const st = state.pets[b.dataset.pet], it = SHOP_BY[b.dataset.id]; if (st && it && owned(it.id)) { st.eq[it.slot] = it.id; persist(); closeGacha(); render(); toast(`Đã mặc ${esc(it.n)} cho ${esc(PET_BY[b.dataset.pet].name)}`); } break; }
+    case 'gx-goday': { const D = derive(); ui.back = b.dataset.date === D.Y; ui.open = {}; go('today'); break; }
     case 'evo-close': { const c = $('#evo'); if (c) c.remove(); render(); break; }
     case 'wsave': saveWeight(b.dataset.date, b.dataset.input); break;
     case 'wdel': delete state.w[b.dataset.date]; persist(); render(); toast('Đã xóa số cân ' + fmtDM(b.dataset.date)); break;
@@ -1056,7 +1089,7 @@ document.addEventListener('change', e => {
   else { const r = new FileReader(); r.onload = () => done(String(r.result || '')); r.onerror = () => toast('Không đọc được file'); r.readAsText(file); }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { if ($('#modal')) closeModal(); else if ($('#evo')) { $('#evo').remove(); render(); } else if (ui.pet) closePet(); const c = $('#cele'); if (c) c.remove(); }
+  if (e.key === 'Escape') { if ($('#gres') || $('#epic-rev')) { closeGacha(); render(); } else if ($('#modal')) closeModal(); else if ($('#evo')) { $('#evo').remove(); render(); } else if (ui.pet) closePet(); const c = $('#cele'); if (c) c.remove(); }
   if (e.key === 'Enter' && e.target && e.target.dataset && e.target.dataset.wdate) { e.preventDefault(); saveWeight(e.target.dataset.wdate, e.target.id); }
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('scene-pet')) { e.preventDefault(); const id = e.target.dataset.pet; if (id !== 'egg') openPet(id); }
 });

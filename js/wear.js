@@ -69,3 +69,54 @@ function wearSVG(slot, item, anc, g, petId) {
   if (slot === 'body') { return `<g transform="translate(${f1(a[0])} ${f1(a[1])}) scale(${f1(k * 1000) / 1000} ${f1(a[3] / 72 * 1000) / 1000})">${fn()}</g>`; }
   return `<g transform="translate(${f1(a[0])} ${f1(a[1])}) scale(${f1(k * 1000) / 1000})">${fn()}</g>`;
 }
+
+/* ---------- Đồ độc quyền vòng quay (bản 4) ---------- */
+const RAINBOW = ['#ff3b4f', '#ff9a1f', '#ffe14d', '#3fe06a', '#33b5ff', '#8a5cff'];
+Object.assign(WEAR_ART, {
+  // Mũ: vương miện đỏ vàng, 5 chóp, đá bảy màu
+  gcrown: () => pa('M-34,16 L-40,-20 L-22,-6 L-12,-34 L0,-12 L12,-34 L22,-6 L40,-20 L34,16 Q0,24 -34,16 Z', 'url(#gGold)', 4.5) +
+    pa('M-33,8 Q0,15 33,8 L34,16 Q0,24 -34,16 Z', cel('#ff3b4f', '#b81d3a'), 3.5) + ln('M-30,4 Q0,10 30,4', '#e08a00', 2.5) +
+    [-24, -12, 0, 12, 24].map((x, i) => ci(x, 13 + Math.abs(x) * -.04, 3.6, RAINBOW[i + 1], 2)).join('') +
+    ci(0, -2, 6, '#ff3b4f', 2.8) + hl(-2, -4, 2, 1.2, -30, .8) + [[-40, -20], [-12, -34], [12, -34], [40, -20]].map(([x, y], i) => ci(x, y, 4, RAINBOW[i * 2 % 6], 2)).join('') +
+    `<g class="twinkle">${spark4(-30, -30, 6, '#fff6b0', 1.8)}</g><g class="twinkle" style="animation-delay:.6s">${spark4(32, -34, 5, '#ffffff', 1.6)}</g>` + hl(-18, -8, 5, 2, -30, .7),
+  // Kính: hai mắt kính hình sao, tròng ánh cầu vồng
+  gstar: () => ln('M-38,-2 Q0,-10 38,-2', OL, 5) + [-1, 1].map(sd => pa(starPath(sd * 18, 1, 17, 8.5, 5, -90), lin('#ff5fa2', '#ffd21f', '#33e1ff'), 4)).join('') +
+    ln('M-24,-6 L-18,-1 M12,-6 L18,-1', '#fff', 2.5, 'opacity=".8"') + ln('M-4,-3 Q0,-6 4,-3', OL, 4),
+  // Cổ: khăn lụa bảy màu, đuôi bay
+  gsash: () => { let s = ''; RAINBOW.forEach((c, i) => { const y = -6 + i * 2.2; s += `<path d="M-31,${f1(y)} Q0,${f1(y + 12)} 31,${f1(y)}" fill="none" stroke="${c}" stroke-width="2.6"/>`; }); return pa('M-32,-8 Q0,4 32,-8 L32,8 Q0,20 -32,8 Z', 'none', 4) + s + pa('M-32,-8 Q0,4 32,-8 L32,8 Q0,20 -32,8 Z', 'none', 4) +
+    `<g class="wave">${pa('M16,8 Q30,22 26,40 L34,44 Q40,22 26,4 Z', lin('#ff3b4f', '#ffe14d', '#33b5ff'), 3.5)}</g>`; },
+  // Lưng: đôi cánh vàng kim to, giơ cao ra hai bên để ló khỏi thân cả pet dạng 4 rộng
+  gwings: () => [-1, 1].map(sd => {
+    const bx = sd * 6, by = 8;
+    const pts = [[96, -92], [104, -50], [90, -14], [68, 8], [42, 18], [18, 16]];
+    const wing = k => {
+      const Q = ([x, y]) => [bx + sd * x * k, by + y * k];
+      const [tx, ty] = Q(pts[0]);
+      let d = `M${P(bx, by)} C${P(bx + sd * 18 * k, by - 58 * k)} ${P(bx + sd * 58 * k, by - 98 * k)} ${P(tx, ty)}`;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = Q(pts[i - 1]), [cx, cy] = Q(pts[i]), mx_ = (ax + cx) / 2, my = (ay + cy) / 2;
+        const ox = mx_ - bx, oy = my - by, L = Math.hypot(ox, oy) || 1;
+        d += ` Q${P(mx_ + ox / L * 11 * k, my + oy / L * 11 * k)} ${P(cx, cy)}`;
+      }
+      return d + ` Q${P(bx + sd * 8 * k, by + 12 * k)} ${P(bx, by)} Z`;
+    };
+    let s = pa(wing(1), 'url(#gGold)', 4.5) + pa(wing(.72), '#fff6b0', 3.5) + pa(wing(.46), cel('#ffd21f', '#e08a00'), 3);
+    // gân lông
+    [[1, .9], [2, .9], [3, .88], [4, .85]].forEach(([i, k]) => { const [x, y] = pts[i]; s += ln(`M${P(bx + sd * x * .5, by + y * .5)} L${P(bx + sd * x * k, by + y * k)}`, '#e08a00', 2.2); });
+    return `<g class="pt" style="transform-origin:${sd < 0 ? '100% 100%' : '0% 100%'};animation-name:${sd < 0 ? 'flapl' : 'flapr'};animation-duration:1.6s">${s}</g>`;
+  }).join('')
+});
+Object.assign(FX_ART, {
+  // Hào quang Sử thi: tia cầu vồng xoay sau lưng + đá quý bay quanh
+  gaura: (g) => {
+    const cy = g.hy + 30;
+    let rays = '';
+    for (let i = 0; i < 12; i++) { const a0 = (i * 30 - 8) * Math.PI / 180, a1 = (i * 30 + 8) * Math.PI / 180; rays += `<path d="M100,${f1(cy)} L${P(100 + 104 * Math.cos(a0), cy + 104 * Math.sin(a0))} L${P(100 + 104 * Math.cos(a1), cy + 104 * Math.sin(a1))} Z" fill="${RAINBOW[i % 6]}"/>`; }
+    const gems = [[20, g.hy - 10], [180, g.hy + 10], [32, 160], [170, 156], [100, g.hy - 66]];
+    return {
+      b: `<circle cx="100" cy="${f1(cy)}" r="92" fill="url(#gGlow)" opacity=".55"/><g opacity=".42"><g class="spin" style="transform-origin:100px ${f1(cy)}px">${rays}</g></g>` +
+        `<circle cx="100" cy="${f1(cy)}" r="80" fill="none" stroke="#fff6b0" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round" opacity=".8"/>`,
+      f: `<g class="fx-gems">` + gems.map(([x, y], i) => `<g class="float" style="animation-delay:-${f1(i * .4)}s">${pa(`M${P(x, y - 7)} L${P(x + 6, y)} L${P(x, y + 8)} L${P(x - 6, y)} Z`, RAINBOW[(i * 2) % 6], 2.2)}${hl(x - 1.5, y - 2.5, 1.6, 1, 0, .8)}</g>`).join('') + `</g>`
+    };
+  }
+});

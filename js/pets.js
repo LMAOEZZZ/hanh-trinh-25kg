@@ -4705,3 +4705,2250 @@ const visorGlow = (x, y, w, h, col = '#ff2e4a') => `<rect x="${f1(x - w / 2)}" y
     draw(f, g, c) { return fit([null, phoenix1, phoenix2, phoenix3, phoenix4][f](PHX[f]), [1, 1.14, .96, .92, 1][f]); }
   };
 })();
+
+/* ---------- SỬ THI ---------- */
+// Khối PET_SPECS.ep_* của 7 pet Sử thi ghép ngay dưới dòng này.
+
+/* ===================== SỬ THI · NGHÊ LỬA (ep_nghe, hệ Lửa) =====================
+   Linh vật canh giữ đền Việt: dáng chó-sư tử, bờm xoăn ốc, sơn son thếp vàng, kết với lửa.
+   Nghê con ôm ngọc → Nghê thiếu niên vờn cầu → Nghê trưởng thành ngồi canh trên trống đồng → Nghê thần trên cầu lửa, hào quang mặt trời trống đồng.
+   Mỗi dạng là một dáng riêng, tọa độ tuyệt đối trong khung 200×200 (tâm x = 100, chân chạm y = 188). Không dùng RIG.
+   draw(f, g, c) giữ chữ ký chung; g và c bị bỏ qua (mỗi dạng có bảng màu riêng NGH[f]).
+   Trả về { back, body, head, front, anc }; anc.halo = [x, y, rx] là vị trí đầu thật cho hiệu ứng hào quang (haloAt).
+   Cần: gfx.js (pa, el, ci, ln, hl, bl, P, f1, cel, eye, capsule, OL; gradient #gFlame, #gGold của baseDefs) và pets.js (PET_SPECS, PET_LITE).
+   Mọi hàm phụ nằm trong IIFE, tiền tố ngh, không thêm tên toàn cục nào ngoài PET_SPECS.ep_nghe. */
+(() => {
+  const R = Math.PI / 180;
+  const GOLD = '#ffd23f', GOLD_S = '#e08a00', GOLD_D = '#b85f00';
+  // Bảng màu từng dạng: b thân son, s bóng, d chân xa, l kem (mõm, bụng), ls bóng kem, g vàng bờm, gs bóng vàng, sp nét xoắn, i mống mắt
+  const NGH = [null,
+    { b: '#ff6440', s: '#d6301f', d: '#a81e1a', l: '#ffeccc', ls: '#f5c690', g: '#ffd84a', gs: '#e8920a', sp: '#c86a00', i: '#ffb21f', ear: '#ff9a8a' },
+    { b: '#ff5a3a', s: '#cc2a1c', d: '#9a1a18', l: '#ffe6c0', ls: '#f0bc84', g: '#ffd23f', gs: '#e08a00', sp: '#c06200', i: '#ffb21f', ear: '#ff8f84' },
+    { b: '#f84a32', s: '#b81e1a', d: '#861214', l: '#ffe2b8', ls: '#e9ae72', g: '#ffd21f', gs: '#d98200', sp: '#b45a00', i: '#ffd21f', ear: '#ff8a80' },
+    { b: '#f23a2c', s: '#9e101c', d: '#6e0a14', l: '#ffe0ae', ls: '#e6a060', g: '#ffd21f', gs: '#d97a00', sp: '#a85000', i: '#fff59a', ear: '#ff7f7a' }
+  ];
+  const nghE = (cx, cy, rx, ry, a = 0) => `<ellipse cx="${f1(cx)}" cy="${f1(cy)}" rx="${f1(rx)}" ry="${f1(ry)}"${a ? ` transform="rotate(${f1(a)} ${f1(cx)} ${f1(cy)})"` : ''}/>`;
+  const nghC = (x, y, r) => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}"/>`;
+  const nghD = d => `<path d="${d}"/>`;
+  const nghCap = (x1, y1, x2, y2, r1, r2 = r1) => nghD(capsule(x1, y1, x2, y2, r1, r2));
+  const nghLimb = pts => pts.slice(1).map((q, i) => nghCap(pts[i][0], pts[i][1], q[0], q[1], pts[i][2], q[2])).join('');
+  // Nhiều ngọn lửa gộp một path (nhẹ hơn): L = [[x, y, cao, rộng, góc], ...]; lõi sáng cho ngọn cao ≥ o.coreMin (mặc định 14)
+  function nghFlD(x, y, h, w, a, core) {
+    const ca = Math.cos(a * R), sa = Math.sin(a * R), T = (u, v) => P(x + u * w * ca - v * h * sa, y + u * w * sa + v * h * ca);
+    return core ? `M${T(-.26, -.04)}C${T(-.3, -.26)} ${T(-.04, -.32)} ${T(.02, -.52)}C${T(.3, -.32)} ${T(.32, -.14)} ${T(.24, -.03)}Q${T(0, .04)} ${T(-.26, -.04)}Z`
+      : `M${T(-.5, 0)}C${T(-.62, -.38)} ${T(-.1, -.5)} ${T(-.2, -.78)}C${T(.08, -.62)} ${T(.12, -.6)} ${T(.16, -1)}C${T(.6, -.64)} ${T(.64, -.3)} ${T(.5, 0)}Q${T(0, .12)} ${T(-.5, 0)}Z`;
+  }
+  const nghFlames = (L, o = {}) => pa(L.map(q => nghFlD(q[0], q[1], q[2], q[3] ?? q[2] * .6, q[4] || 0)).join(''), o.fill || 'url(#gFlame)', o.sw ?? 4) +
+    (o.core === false ? '' : pa(L.filter(q => q[2] >= (o.coreMin || 14)).map(q => nghFlD(q[0], q[1], q[2], q[3] ?? q[2] * .6, q[4] || 0, 1)).join(''), '#fff59a', 0));
+  // Đường cong mượt qua các điểm (Catmull-Rom)
+  function nghSmooth(p, move = true) {
+    let d = (move ? 'M' : ' L') + P(p[0][0], p[0][1]);
+    for (let i = 0; i < p.length - 1; i++) {
+      const a = p[i - 1] || p[i], b = p[i], c = p[i + 1], e = p[i + 2] || c;
+      d += ` C${P(b[0] + (c[0] - a[0]) / 6, b[1] + (c[1] - a[1]) / 6)} ${P(c[0] - (e[0] - b[0]) / 6, c[1] - (e[1] - b[1]) / 6)} ${P(c[0], c[1])}`;
+    }
+    return d;
+  }
+  // Khối thuôn theo đường tâm (đuôi), rộng w0 → w1
+  function nghTaper(c, w0, w1) {
+    const L = [], Rr = [], n = c.length;
+    for (let i = 0; i < n; i++) {
+      const a = c[Math.max(0, i - 1)], b = c[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy) || 1, w = (w0 + (w1 - w0) * i / (n - 1)) / 2;
+      L.push([c[i][0] - dy / m * w, c[i][1] + dx / m * w]); Rr.push([c[i][0] + dy / m * w, c[i][1] - dx / m * w]);
+    }
+    return nghSmooth(L) + nghSmooth(Rr.reverse(), false) + ' Z';
+  }
+  // Nét xoắn ốc trong một lọn bờm: tâm (x, y), bán kính r, xoay a, chiều sd
+  function nghSpiral(x, y, r, a = 0, sd = 1) {
+    const k = r * .25, ca = Math.cos(a * R), sa = Math.sin(a * R), Q = u => P(x + u * ca, y + u * sa), f = sd > 0 ? 1 : 0;
+    return `M${Q(-k * .2)} A${f1(k * .9)},${f1(k * .9)} 0 0 ${f} ${Q(k * 1.6)} A${f1(k * 1.9)},${f1(k * 1.9)} 0 0 ${f} ${Q(-k * 2.2)} A${f1(k * 2.7)},${f1(k * 2.7)} 0 0 ${f} ${Q(k * 3.2)}`;
+  }
+  // Cụm lọn xoăn: một khối viền chung, mỗi lọn cel riêng, nét xoắn gộp một path. L = [[x, y, r, góc, chiều], ...]
+  function nghCurls(L, c, o = {}) {
+    const base = o.b || c.g, sh = o.s || c.gs;
+    let s = bl(L.map(([x, y, r]) => nghC(x, y, r)).join(''), cel(base, sh), o.sw ?? 4.5);
+    s += ln(L.map(([x, y, r, a = 0, sd = 1]) => nghSpiral(x, y, r * .86, a, sd)).join(' '), o.sp || c.sp, o.lw ?? 2.2);
+    if (o.hl !== false) s += L.filter((q, i) => q[2] >= 7 && i % 2 === 0).map(([x, y, r]) => hl(x - r * .42, y - r * .48, r * .28, r * .14, -35, .55)).join('');
+    return s;
+  }
+  // Cánh hoa / tai: gốc (x, y), dài L, nửa rộng w, hướng ang (độ)
+  function nghPetalD(x, y, L, w, ang) {
+    const a = ang * R, ux = Math.cos(a), uy = Math.sin(a), q = (k, s) => P(x + ux * L * k - uy * w * s, y + uy * L * k + ux * w * s);
+    return `M${P(x, y)} C${q(.15, 1.1)} ${q(.7, 1.15)} ${q(1, 0)} C${q(.7, -1.15)} ${q(.15, -1.1)} ${P(x, y)} Z`;
+  }
+  const nghEar = (x, y, L, w, ang, c) => pa(nghPetalD(x, y, L, w, ang), cel(c.b, c.s), 4.5) + pa(nghPetalD(x + Math.cos(ang * R) * 2.5, y + Math.sin(ang * R) * 2.5, L * .7, w * .5, ang), c.ear, 0);
+  // Lông mày xoăn vàng: gốc trong (x, y), bên sd, cỡ k
+  function nghBrow(x, y, sd, k, c, w = 4.2) {
+    const ex = x + sd * 12 * k, ey = y - 3.5 * k, d = `M${P(x, y)} Q${P(x + sd * 6 * k, y - 5.5 * k)} ${P(ex, ey)}`;
+    return ln(d, OL, w * k + 4) + ln(d, c.g, w * k) + ci(ex + sd * 2.6 * k, ey + .6 * k, 3.6 * k, cel(c.g, c.gs), 2.6) + ln(nghSpiral(ex + sd * 2.6 * k, ey + .6 * k, 3.1 * k, 0, sd), c.sp, 1.5);
+  }
+  // Mắt tròn to (dạng 1) và mắt có mí (dạng 2–4)
+  const nghEyeCute = (cx, cy, r, sd, c) => eye(cx, cy, r, r * 1.08, sd, { iris: c.i, lid: 0, brow: false, pr: r * .58, ew: 3.6 });
+  const nghEye = (cx, cy, rx, ry, sd, c, lid, o = {}) => eye(cx, cy, rx, ry, sd, Object.assign({ iris: c.i, lid, skin: c.b, bw: 4.6, ew: 3.6 }, o));
+  // Mặt Nghê: mõm kem hai bên, mũi to, miệng cười rộng; mode: 'smile' | 'grin' | 'open'
+  function nghFace(hx, hy, k, c, mode = 'smile') {
+    let s = el(hx - 7 * k, hy + 13 * k, 9 * k, 7.4 * k, c.l, 0) + el(hx + 7 * k, hy + 13 * k, 9 * k, 7.4 * k, c.l, 0) + el(hx, hy + 17 * k, 7 * k, 5.5 * k, c.l, 0);
+    s += `<g fill="${c.s}">${[-1, 1].map(sd => [[10, 12], [13, 14.5], [9.5, 16]].map(([dx, dy]) => nghC(hx + sd * dx * k, hy + dy * k, 1.15 * k)).join('')).join('')}</g>`;
+    if (mode === 'open') {
+      s += pa(`M${P(hx - 9 * k, hy + 16 * k)} Q${P(hx, hy + 31 * k)} ${P(hx + 9 * k, hy + 16 * k)} Q${P(hx, hy + 19 * k)} ${P(hx - 9 * k, hy + 16 * k)} Z`, '#7a1030', 3) + el(hx, hy + 23.5 * k, 4.6 * k, 2.6 * k, '#ff6a8a', 0) +
+        pa(`M${P(hx - 7 * k, hy + 16.6 * k)} l${f1(1.6 * k)},${f1(4.2 * k)} l${f1(1.6 * k)},${f1(-3.8 * k)} Z M${P(hx + 7 * k, hy + 16.6 * k)} l${f1(-1.6 * k)},${f1(4.2 * k)} l${f1(-1.6 * k)},${f1(-3.8 * k)} Z`, '#fff', 1.5);
+    }
+    s += ln(`M${P(hx - 13 * k, hy + 13 * k)} Q${P(hx - 6.5 * k, hy + 20 * k)} ${P(hx, hy + 15.5 * k)} Q${P(hx + 6.5 * k, hy + 20 * k)} ${P(hx + 13 * k, hy + 13 * k)}`, OL, 2.8);
+    if (mode === 'grin') s += pa(`M${P(hx + 4 * k, hy + 17.2 * k)} l${f1(1.7 * k)},${f1(4 * k)} l${f1(1.7 * k)},${f1(-4.4 * k)} Z M${P(hx - 7.4 * k, hy + 17.2 * k)} l${f1(1.7 * k)},${f1(4.4 * k)} l${f1(1.7 * k)},${f1(-4 * k)} Z`, '#fff', 1.5);
+    // Mũi to bè
+    s += pa(`M${P(hx - 7 * k, hy + 6 * k)} Q${P(hx, hy + 2.6 * k)} ${P(hx + 7 * k, hy + 6 * k)} Q${P(hx + 8 * k, hy + 11 * k)} ${P(hx, hy + 12 * k)} Q${P(hx - 8 * k, hy + 11 * k)} ${P(hx - 7 * k, hy + 6 * k)} Z`, '#5a1430', 3) + hl(hx - 2 * k, hy + 5.6 * k, 2.8 * k, 1.2 * k, 0, .75);
+    return s;
+  }
+  // Ấn lửa trên trán
+  const nghMark = (x, y, h, c) => pa(`M${P(x, y)} C${P(x - h * .42, y - h * .3)} ${P(x - h * .3, y - h * .7)} ${P(x, y - h)} C${P(x + h * .3, y - h * .7)} ${P(x + h * .42, y - h * .3)} ${P(x, y)} Z`, 'url(#gGold)', 2.4) +
+    pa(`M${P(x, y - h * .2)} C${P(x - h * .18, y - h * .36)} ${P(x - h * .12, y - h * .58)} ${P(x, y - h * .72)} C${P(x + h * .12, y - h * .58)} ${P(x + h * .18, y - h * .36)} ${P(x, y - h * .2)} Z`, '#ff3d1a', 0);
+  // Ngọc lửa (cầu lửa): tâm (x, y), bán kính r
+  function nghOrb(x, y, r, o = {}) {
+    let s = '';
+    if (o.glow && !PET_LITE) s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r * 1.7)}" fill="#ffb21f" opacity=".18"/><circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r * 1.35)}" fill="#ffd21f" opacity=".22"/>`;
+    if (o.flames) s += nghFlames([-56, -20, 20, 56].map((a, i) => [x + Math.sin(a * R) * r * .8, y - Math.cos(a * R) * r * .8, r * (i % 3 ? 1.1 : .85), r * .62, a]), { sw: 3.6, core: false });
+    s += ci(x, y, r, cel('#fff3a0', '#ff8a1f', .58), 4);
+    s += ln(`M${P(x - r * .55, y + r * .15)} Q${P(x - r * .2, y - r * .55)} ${P(x + r * .35, y - r * .2)} Q${P(x + r * .55, y + r * .15)} ${P(x + r * .2, y + r * .3)} M${P(x + r * .5, y + r * .5)} Q${P(x - r * .1, y + r * .85)} ${P(x - r * .6, y + r * .45)}`, '#ff5a1f', Math.max(1.6, r * .11));
+    return s + hl(x - r * .38, y - r * .45, r * .3, r * .15, -35, .8);
+  }
+  // Chuông đồng: đỉnh quai (x, y), cỡ k, màu col/cold
+  function nghBell(x, y, k, col = '#e8a640', cold = '#a8601c') {
+    return ci(x, y + 1.5 * k, 2.4 * k, 'none', 2.2) +
+      pa(`M${P(x - 6.5 * k, y + 13 * k)} Q${P(x - 7 * k, y + 3 * k)} ${P(x, y + 3 * k)} Q${P(x + 7 * k, y + 3 * k)} ${P(x + 6.5 * k, y + 13 * k)} Z`, cel(col, cold), 3) +
+      el(x, y + 13 * k, 8.2 * k, 2.4 * k, cel(col, cold), 2.8) + ln(`M${P(x - 5 * k, y + 8 * k)} Q${P(x, y + 9.5 * k)} ${P(x + 5 * k, y + 8 * k)}`, cold, 1.6) +
+      ci(x, y + 15.6 * k, 1.9 * k, OL, 0) + hl(x - 3 * k, y + 6.5 * k, 1.4 * k, 2.6 * k, 20, .7);
+  }
+  // Đốm tàn lửa bay
+  const nghEmbers = spots => PET_LITE ? '' : `<g class="motes">` + spots.map(([x, y, r], i) => `<g class="ember" style="animation-delay:-${f1(i * .43)}s">${pa(nghFlD(x, y + r, r * 2.3, r * 1.5, (i % 3 - 1) * 14), 'url(#gFlame)', 1.8)}</g>`).join('') + `</g>`;
+  const nghAnc = (head, eyes, neck, back, body, halo) => ({ head, eyes, neck, back, body, halo });
+
+  /* ---------------- Dạng 1: Nghê con ngồi ôm ngọc ---------------- */
+  function nghe1(c) {
+    let back = '', body = '', head = '', front = '';
+    // Đuôi cuộn lên, chóp lọn xoăn có lửa
+    back += `<g class="pt">` + pa(nghTaper([[114, 181], [136, 180], [151, 170], [157, 157], [155, 148]], 13, 9), cel(c.b, c.s), 4.5) +
+      nghFlames([[156, 138, 19, 12, 10]], { sw: 3.6 }) + nghCurls([[155, 146, 8.5, 20, 1], [163, 141, 6, 0, -1], [147, 141, 5.5, 0, 1]], c) + `</g>`;
+    // Thân ngồi tròn + hai đùi, một khối
+    body += bl(nghE(100, 163, 26, 22) + nghE(77, 176, 14, 11.5) + nghE(123, 176, 14, 11.5), cel(c.b, c.s));
+    body += el(100, 168, 15, 14, c.l, 0) + ln('M80,170 q4,6 4,12 M120,170 q-4,6 -4,12', c.s, 2.4);
+    body += el(73, 184, 9.5, 5.4, c.l, 4) + el(127, 184, 9.5, 5.4, c.l, 4) + ln('M70,187 v-3 M76,187 v-3 M124,187 v-3 M130,187 v-3', OL, 2);
+    // Ôm ngọc lửa trước bụng
+    body += bl(nghCap(82, 150, 86, 161, 7.6, 6.8) + nghCap(118, 150, 114, 161, 7.6, 6.8), cel(c.b, c.s), 5);
+    body += nghOrb(100, 173, 12.5);
+    body += bl(nghC(87.5, 164, 6.2) + nghC(112.5, 164, 6.2), cel(c.b, c.s), 4) + ln('M85,168 l1.5,-2.6 M89,168.6 l.6,-2.8 M115,168 l-1.5,-2.6 M111,168.6 l-.6,-2.8', OL, 1.6);
+    // Tai cụp + đầu to tròn, má bầu
+    head += bl(nghD(nghPetalD(70, 106, 19, 9, 150)) + nghD(nghPetalD(130, 106, 19, 9, 30)) + nghE(100, 121, 35, 30) + nghE(71, 132, 10, 9) + nghE(129, 132, 10, 9), cel(c.b, c.s));
+    head += pa(nghPetalD(68, 108, 13, 4.5, 150), c.ear, 0) + pa(nghPetalD(132, 108, 13, 4.5, 30), c.ear, 0);
+    // Búi lọn xoăn trên đỉnh, ngọn lửa nhỏ
+    head += `<g class="flame">${nghFlames([[100, 86, 25, 14, 0]], { sw: 3.6 })}</g>`;
+    head += nghCurls([[77, 101, 6.5, 30, -1], [123, 101, 6.5, 150, 1], [86, 93, 9, 20, -1], [114, 93, 9, 160, 1], [100, 89, 10.5, 0, 1]], c);
+    head += nghCurls([[66, 123, 6, 0, 1], [68, 134, 6.8, 0, -1], [134, 123, 6, 180, -1], [132, 134, 6.8, 180, 1]], c, { hl: false });
+    head += nghMark(100, 108, 9, c);
+    head += nghEyeCute(85, 120, 10.5, -1, c) + nghEyeCute(115, 120, 10.5, 1, c);
+    head += nghBrow(93, 107, -1, .8, c) + nghBrow(107, 107, 1, .8, c);
+    head += nghFace(100, 121, .8, c, 'open');
+    head += el(79, 137, 5, 3, '#ff7a9a', 0, 'opacity=".6"') + el(121, 137, 5, 3, '#ff7a9a', 0, 'opacity=".6"');
+    head += nghCurls([[92, 150, 4.8, 0, -1], [100, 152, 5.2, 0, 1], [108, 150, 4.8, 0, 1]], c, { hl: false, lw: 1.6, sw: 3.5 });
+    return { back, body, head, front, anc: nghAnc([100, 95, 56], [100, 120, 50], [100, 150, 40], [100, 140, 60, 44], [100, 166, 38, 36], [100, 76, 27]) };
+  }
+
+  /* ---------------- Dạng 2: Nghê thiếu niên vờn ngọc ---------------- */
+  function nghe2(c) {
+    let back = '', body = '', head = '', front = '';
+    // Đuôi lửa cuộn cao
+    back += `<g class="pt">` + pa(nghTaper([[146, 130], [162, 122], [172, 108], [174, 94], [168, 84]], 15, 11), cel(c.b, c.s), 5) +
+      nghFlames([[169, 68, 27, 16, 6], [181, 75, 17, 10, 42], [157, 73, 16, 10, -40]]) +
+      nghCurls([[168, 80, 10, 30, 1], [179, 75, 7, 0, -1], [158, 74, 7, 0, 1], [172, 91, 6, 0, -1]], c) + `</g>`;
+    // Chân phía xa (tối)
+    back += bl(nghLimb([[98, 140, 8], [100, 166, 6.2], [100, 181, 5.6]]) + nghLimb([[124, 140, 8.5], [120, 164, 6.4], [122, 181, 5.8]]), cel(c.s, c.d), 4.5);
+    back += el(102, 184, 8.5, 5, c.ls, 3.8) + el(124, 184, 8.5, 5, c.ls, 3.8);
+    // Ngọc lửa dưới chân trước
+    body += nghOrb(46, 171, 15, { glow: true, flames: true });
+    // Thân ngang + chân gần + cổ, một khối
+    body += bl(nghE(88, 130, 21, 19) + nghE(134, 128, 22, 18) + nghCap(88, 129, 134, 128, 17, 16.5) + nghE(140, 140, 14, 15) +
+      nghLimb([[142, 146, 8.4], [146, 166, 6.6], [144, 181, 6.2]]) + nghLimb([[82, 136, 9], [68, 150, 7.2], [58, 156, 6.6]]) + nghCap(84, 122, 72, 100, 15, 13), cel(c.b, c.s));
+    body += hl(84, 118, 8, 3.4, -30, .45) + nghFlames([[75, 141, 12, 7, 30], [152, 161, 11, 6.5, 100]], { sw: 3, core: false });
+    const sc2 = nghSpiral(138, 132, 9, 0, 1) + ' M126,142 Q134,148 144,143';
+    body += ln(sc2, OL, 5) + ln(sc2, GOLD, 2.4);
+    body += pa('M60,148 Q66,154 72,150 L74,155 Q67,160 61,153 Z', 'url(#gGold)', 2.2) + pa('M139,166 Q146,169 153,166 L153,171 Q146,174 139,171 Z', 'url(#gGold)', 2.2);
+    body += el(146, 184, 9.5, 5.5, c.l, 4) + ln('M143,187 v-3 M149,187 v-3', OL, 2);
+    body += el(55, 156, 9, 6, c.l, 3.8, 'transform="rotate(-20 55 156)"') + ln('M50,159 l1,-3 M55,160 l1,-3', OL, 1.8);
+    // Bờm lửa xoăn sau gáy và dọc cổ
+    body += nghFlames([[88, 66, 22, 13, 28], [98, 80, 23, 13, 48], [104, 96, 21, 12, 66], [104, 112, 18, 11, 86]]);
+    body += nghCurls([[84, 70, 8, 0, 1], [92, 81, 10, 20, -1], [97, 95, 10.5, 40, 1], [99, 109, 9.5, 60, -1], [94, 121, 8.5, 80, 1], [80, 62, 7, 0, -1]], c);
+    // Đầu nhìn người xem
+    const hx = 64, hy = 92;
+    head += bl(nghD(nghPetalD(42, 86, 17, 8, 155)) + nghD(nghPetalD(86, 86, 17, 8, 25)) + nghE(hx, hy, 27, 23) + nghE(hx - 20, hy + 9, 8.5, 8) + nghE(hx + 20, hy + 9, 8.5, 8), cel(c.b, c.s));
+    head += pa(nghPetalD(40, 87, 11.5, 4, 155), c.ear, 0) + pa(nghPetalD(88, 87, 11.5, 4, 25), c.ear, 0);
+    head += `<g class="flame">${nghFlames([[hx, 63, 16, 10, 0]], { sw: 3.4 })}</g>`;
+    head += nghCurls([[hx - 13, 74, 6.5, 30, -1], [hx + 13, 74, 6.5, 150, 1], [hx, 69, 8.5, 0, 1]], c);
+    head += nghCurls([[hx - 23, hy + 9, 6.8, 0, -1], [hx + 23, hy + 9, 6.8, 180, 1]], c, { hl: false, lw: 1.8 });
+    head += nghMark(hx, hy - 12, 8, c);
+    head += nghEye(hx - 11, hy - 1, 8, 8.6, -1, c, .55) + nghEye(hx + 11, hy - 1, 8, 8.6, 1, c, .55);
+    head += nghBrow(hx - 5, hy - 12, -1, .85, c) + nghBrow(hx + 5, hy - 12, 1, .85, c);
+    head += nghFace(hx, hy, .75, c, 'grin');
+    head += nghCurls([[hx - 7, hy + 23, 4.6, 0, -1], [hx, hy + 25, 5, 0, 1], [hx + 7, hy + 23, 4.6, 0, 1]], c, { hl: false, lw: 1.6, sw: 3.5 });
+    return { back, body, head, front, anc: nghAnc([hx, 72, 46], [hx, hy - 1, 42], [74, 116, 32], [118, 102, 62, 42], [100, 132, 40, 30], [hx, 56, 23]) };
+  }
+
+  /* ---------------- Dạng 3: Nghê trưởng thành ngồi canh trên trống đồng ---------------- */
+  // Trống đồng: mặt tâm (cx, cy), nửa rộng rx, nửa cao mặt ry; tang phình, lưng thắt, chân loe
+  function nghDrum(cx, cy, rx, ry) {
+    const B = '#dc9c45', BS = '#94561c', T = '#f3c160', TS = '#bb7a2c', W = rx * .86, F = rx * .92;
+    let s = pa(`M${P(cx - rx, cy)} C${P(cx - rx, cy + 7)} ${P(cx - W, cy + 12)} ${P(cx - W, cy + 18)} C${P(cx - W, cy + 21)} ${P(cx - F, 179)} ${P(cx - F, 182)} Q${P(cx, 194)} ${P(cx + F, 182)} C${P(cx + F, 179)} ${P(cx + W, cy + 21)} ${P(cx + W, cy + 18)} C${P(cx + W, cy + 12)} ${P(cx + rx, cy + 7)} ${P(cx + rx, cy)} Z`, cel(B, BS, .72), 4.5);
+    // Băng vòng tròn tiếp tuyến trên tang trống, răng cưa ở chân
+    const yb = t => 4 * t * (1 - t) * ry * 1.05;
+    let d = '', zz = '', cs = '';
+    for (let i = 0; i <= 12; i++) {
+      const t = i / 12, x = cx - rx * .9 + t * rx * 1.8, y = cy + 9 + yb(t);
+      d += (i ? 'L' : 'M') + P(x, y);
+      if (i % 12) cs += nghC(x, y, 2.9);
+    }
+    for (let i = 0; i <= 16; i++) { const t = i / 16, x = cx - F + 2 + t * (F * 2 - 4), y = 178 + yb(t) * .9 + (i % 2 ? 3.6 : 0); zz += (i ? 'L' : 'M') + P(x, y); }
+    s += ln(d, BS, 1.6) + `<g fill="${T}" stroke="${BS}" stroke-width="1.5">${cs}</g>` + ln(cs.replace(/<circle cx="([\d.]+)" cy="([\d.]+)" r="[\d.]+"\/>/g, 'M$1,$2h.01'), BS, 2.2);
+    s += ln(`M${P(cx - W, cy + 18)} Q${P(cx, cy + 18 + ry * 2.1)} ${P(cx + W, cy + 18)}`, BS, 2) + ln(zz, BS, 1.6);
+    // Mặt trống: vành đồng tâm, ngôi sao 14 cánh
+    s += el(cx, cy, rx, ry, cel(T, TS, .78), 4.5) + `<g fill="none" stroke="${TS}"><ellipse cx="${f1(cx)}" cy="${f1(cy)}" rx="${f1(rx * .84)}" ry="${f1(ry * .78)}" stroke-width="1.8"/><ellipse cx="${f1(cx)}" cy="${f1(cy)}" rx="${f1(rx * .67)}" ry="${f1(ry * .6)}" stroke-width="2.2" stroke-dasharray="0 5" stroke-linecap="round"/></g>`;
+    let st = '';
+    for (let i = 0; i < 14; i++) {
+      const a0 = (i * 360 / 14) * R, a1 = ((i + .5) * 360 / 14) * R;
+      st += (i ? 'L' : 'M') + P(cx + Math.cos(a0) * rx * .52, cy + Math.sin(a0) * ry * .5) + 'L' + P(cx + Math.cos(a1) * rx * .2, cy + Math.sin(a1) * ry * .2);
+    }
+    s += pa(st + 'Z', '#ffeaa0', 1.6);
+    return s + hl(cx - rx * .6, cy - ry * .3, rx * .16, 1.8, -4, .5);
+  }
+  function nghe3(c) {
+    let back = '', body = '', head = '', front = '';
+    back += nghDrum(104, 157, 52, 10.5);
+    // Đuôi lửa lớn dựng sau đùi
+    back += `<g class="pt">` + pa(nghTaper([[136, 146], [156, 140], [170, 124], [175, 108], [170, 96]], 17, 12), cel(c.b, c.s), 5) +
+      nghFlames([[169, 75, 32, 19, 4], [184, 84, 20, 12, 42], [154, 82, 18, 11, -38], [182, 102, 15, 10, 80]]) +
+      nghCurls([[169, 92, 11, 30, 1], [180, 86, 7.5, 0, -1], [158, 86, 7, 0, 1], [178, 101, 6.5, 0, -1]], c) + `</g>`;
+    // Chân trước phía xa
+    back += bl(nghLimb([[98, 126, 8.2], [100, 146, 7], [100, 152, 6.8]]), cel(c.s, c.d), 4.5) + el(101, 154, 9, 5, c.ls, 3.8) + ln('M98,157 v-3 M104,157 v-3', OL, 1.8);
+    // Bờm lọn xoăn đổ dọc gáy; lửa tỏa sau
+    body += nghFlames([[100, 40, 25, 14, 18], [112, 52, 27, 15, 40], [119, 68, 27, 15, 60], [119, 86, 23, 13, 82], [113, 101, 18, 11, 104]]);
+    // Thân ngồi thẳng: đùi sau tròn + ngực ưỡn + chân trước gần
+    body += bl(nghE(128, 140, 20, 18) + nghCap(124, 138, 92, 112, 19, 19) + nghE(86, 116, 18, 21) + nghLimb([[80, 122, 9], [79, 146, 7.4], [78, 152, 7.2]]), cel(c.b, c.s));
+    body += pa('M73,106 Q86,100 98,108 Q100,122 93,131 Q83,134 76,126 Q69,116 73,106 Z', c.l, 0) + ln('M80,116 l3,6 M90,114 l-2,7', c.ls, 2);
+    const sc3 = nghSpiral(130, 138, 11, 0, 1) + ' M120,147 Q122,155 132,154';
+    body += ln(sc3, OL, 5.2) + ln(sc3, GOLD, 2.5);
+    body += nghCurls([[96, 46, 9.5, 0, 1], [105, 59, 11, 20, -1], [109, 74, 11, 40, 1], [108, 89, 10, 60, -1], [102, 101, 8.5, 80, 1]], c);
+    body += el(146, 155, 11, 5.5, c.l, 4) + el(77, 155, 10.5, 5.6, c.l, 4) + ln('M73,158 v-3 M79,158 v-3 M143,158 v-3 M149,158 v-3', OL, 2);
+    // Lửa xoắn quanh cổ chân + vòng vàng
+    body += nghFlames([[73, 141, 11, 6.5, -24], [80, 139.5, 14, 8, 8], [87, 141, 11, 6.5, 40], [140, 150, 10, 6, -10], [147, 149, 13, 7.5, 22], [153, 151, 10, 6, 55]], { sw: 3 });
+    body += [[79, 142], [146, 149.5]].map(([x, y]) => pa(`M${P(x - 8, y - 1)} Q${P(x, y + 2.6)} ${P(x + 8, y - 1)} L${P(x + 8, y + 3.6)} Q${P(x, y + 7)} ${P(x - 8, y + 3.6)} Z`, 'url(#gGold)', 2.2)).join('');
+    // Vòng cổ đồng + chuông
+    body += pa('M64,96 Q84,108 104,94 L105,101 Q84,116 63,103 Z', cel('#ffd84a', '#c47a10'), 3.2) + `<g fill="#ff3b4f" stroke="${OL}" stroke-width="1.2">${[[70, 103], [77, 106], [91, 106], [98, 102]].map(([x, y]) => nghC(x, y, 1.7)).join('')}</g>`;
+    body += nghBell(84, 107, 1.1);
+    // Đầu
+    const hx = 76, hy = 64;
+    head += bl(nghD(nghPetalD(51, 56, 17, 8, 160)) + nghD(nghPetalD(101, 56, 17, 8, 20)) + nghE(hx, hy, 28, 24) + nghE(hx - 21, hy + 9, 9, 8.5) + nghE(hx + 21, hy + 9, 9, 8.5), cel(c.b, c.s));
+    head += pa(nghPetalD(49, 57, 11.5, 4, 160), c.ear, 0) + pa(nghPetalD(103, 57, 11.5, 4, 20), c.ear, 0);
+    head += `<g class="flame">${nghFlames([[hx, 35, 19, 11.5, 0], [hx - 14, 40, 14, 9, -24], [hx + 14, 40, 14, 9, 24]], { sw: 3.6 })}</g>`;
+    head += nghCurls([[hx - 16, 47, 7, 30, -1], [hx + 16, 47, 7, 150, 1], [hx - 7, 41, 8.5, 20, -1], [hx + 7, 41, 8.5, 160, 1]], c);
+    head += nghCurls([[hx - 24, hy + 9, 7.2, 0, -1], [hx + 24, hy + 9, 7.2, 180, 1]], c, { hl: false, lw: 1.8 });
+    head += nghMark(hx, hy - 12, 9, c);
+    head += nghEye(hx - 11, hy - 1, 8, 8.2, -1, c, .85) + nghEye(hx + 11, hy - 1, 8, 8.2, 1, c, .85);
+    head += nghBrow(hx - 5, hy - 12, -1, .9, c) + nghBrow(hx + 5, hy - 12, 1, .9, c);
+    head += nghFace(hx, hy, .8, c, 'open');
+    head += nghCurls([[hx - 8, hy + 25.5, 5, 0, -1], [hx, hy + 28, 5.6, 0, 1], [hx + 8, hy + 25.5, 5, 0, 1]], c, { hl: false, lw: 1.6, sw: 3.5 });
+    return { back, body, head, front, anc: nghAnc([hx, 44, 46], [hx, hy - 1, 42], [84, 100, 38], [108, 98, 52, 46], [90, 120, 36, 34], [hx, 26, 24]) };
+  }
+
+  /* ---------------- Dạng 4: Nghê thần trên cầu lửa, hào quang mặt trời trống đồng ---------------- */
+  // Hào quang: ngôi sao 14 cánh và các vành chấm, vạch của mặt trống đồng
+  function nghSun(cx, cy, r) {
+    if (PET_LITE) return '';
+    let st = '';
+    for (let i = 0; i < 14; i++) {
+      const a0 = (i * 360 / 14 - 90) * R, a1 = ((i + .5) * 360 / 14 - 90) * R;
+      st += (i ? 'L' : 'M') + P(cx + Math.cos(a0) * r * .98, cy + Math.sin(a0) * r * .98) + 'L' + P(cx + Math.cos(a1) * r * .48, cy + Math.sin(a1) * r * .48);
+    }
+    const C = (rr, ex) => `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(r * rr)}" ${ex}/>`;
+    return C(1.02, 'fill="#ff8a1f" opacity=".16"') + C(.62, 'fill="#ffd21f" opacity=".14"') +
+      `<g class="spin" style="transform-origin:${f1(cx)}px ${f1(cy)}px"><path d="${st}Z" fill="#ffd21f" opacity=".34"/><g fill="none" stroke="#ffe680" stroke-linecap="round" opacity=".75">` +
+      C(.84, 'stroke-width="2"') + C(1.02, 'stroke-width="2"') + C(.93, 'stroke-width="5" stroke-dasharray="1.5 7.5"') + C(.74, 'stroke-width="3.4" stroke-dasharray="0 9" stroke="#fff3a8"') + `</g></g>`;
+  }
+  // Dải mây lửa cuộn: chân (x, y), cỡ k, chiều sd (hai đầu xoắn)
+  function nghCloud(x, y, k, sd = 1) {
+    const L = [[x - sd * 24 * k, y - 7 * k, 6.5 * k, 0, sd], [x - sd * 11 * k, y - 11 * k, 9.5 * k, 0, -sd], [x + sd * 4 * k, y - 12.5 * k, 10.5 * k, 0, sd], [x + sd * 18 * k, y - 9 * k, 8 * k, 0, -sd], [x + sd * 29 * k, y - 6 * k, 6 * k, 0, sd]];
+    const xs = L.map(q => q[0]), x0 = Math.min(...xs), x1 = Math.max(...xs);
+    let s = bl(L.map(([cx, cy, r]) => nghC(cx, cy, r)).join('') + `<rect x="${f1(x0)}" y="${f1(y - 9 * k)}" width="${f1(x1 - x0)}" height="${f1(8 * k)}" rx="${f1(4 * k)}"/>`, cel('#ffd45a', '#ff8a1f', .66), 4);
+    s += ln(nghSpiral(L[0][0], L[0][1], L[0][2] * .85, 0, sd) + nghSpiral(L[2][0], L[2][1], L[2][2] * .85, 0, sd) + nghSpiral(L[4][0], L[4][1], L[4][2] * .85, 0, -sd), '#e0560f', 2) + ln(`M${P(x0 + 2, y - 3 * k)} H${f1(x1 - 2)}`, '#e0560f', 1.8);
+    return s + hl(L[2][0] - 3 * k, L[2][1] - 5 * k, 4 * k, 1.8 * k, -20, .6);
+  }
+  function nghe4(c) {
+    let back = '', body = '', head = '', front = '';
+    const hx = 100, hy = 68;
+    back += nghSun(hx, 80, 96);
+    // Vầng bờm lửa xoắn ốc: lửa tỏa ngoài, vành lọn vàng xen đỏ
+    const N = 14, ring = [], fl = [];
+    for (let i = 0; i < N; i++) {
+      const a = (i * 360 / N) * R, rr = 46, x = hx + Math.sin(a) * rr, y = hy + 2 - Math.cos(a) * rr * .95;
+      if (y > 120) continue;
+      fl.push([hx + Math.sin(a) * (rr + 5), hy + 2 - Math.cos(a) * (rr + 5) * .95, i % 2 ? 22 : 31, i % 2 ? 13 : 17, i * 360 / N]);
+      ring.push([x, y, i % 2 ? 9.5 : 12, i * 360 / N, i % 2 ? 1 : -1, i % 2]);
+    }
+    back += nghFlames(fl, { coreMin: 25 });
+    back += nghCurls(ring.filter(q => !q[5]), c, { b: '#ffd21f', s: '#e07000' }) + nghCurls(ring.filter(q => q[5]), c, { b: '#ffa02a', s: '#d9480f', sp: '#9a2a0a' });
+    // Đuôi: chùm lọn lửa bên phải
+    back += `<g class="pt">` + pa(nghTaper([[132, 168], [152, 158], [166, 142], [171, 128]], 18, 13), cel(c.b, c.s), 5) +
+      nghFlames([[171, 104, 29, 17, 8], [186, 116, 19, 11, 50], [156, 112, 17, 10, -32]]) +
+      nghCurls([[170, 120, 11, 30, 1], [182, 114, 7, 0, -1], [159, 114, 7, 0, 1], [178, 130, 6.5, 0, -1]], c) + `</g>`;
+    // Hai đùi sau tròn, hoa văn mây vàng
+    body += bl(nghE(64, 162, 23, 20) + nghE(136, 162, 23, 20), cel(c.b, c.s));
+    let sw = '';
+    for (const sd of [-1, 1]) { const x = 100 + sd * 37; sw += nghSpiral(x, 158, 12, 0, -sd) + ` M${P(x - sd * 15, 170)} Q${P(x - sd * 4, 178)} ${P(x + sd * 9, 171)}`; }
+    body += ln(sw, OL, 5.4) + ln(sw, GOLD, 2.6);
+    // Ngực + chân trước, một khối
+    body += bl(nghE(100, 120, 27, 25) + nghLimb([[86, 124, 10], [86, 146, 8.4], [86, 150, 8.2]]) + nghLimb([[114, 124, 10], [114, 146, 8.4], [114, 150, 8.2]]), cel(c.b, c.s));
+    body += pa('M84,104 Q100,98 116,104 Q120,124 108,140 Q100,146 92,140 Q80,124 84,104 Z', c.l, 0);
+    // Hoa văn vàng kim trên ngực: vòng tròn tiếp tuyến
+    body += ln('M86,117 Q100,126 114,117', GOLD_S, 2.2) + `<g fill="${GOLD}" stroke="${GOLD_D}" stroke-width="1.6">${[[89, 119.5], [100, 122.5], [111, 119.5]].map(([x, y]) => nghC(x, y, 3.2)).join('')}</g>` + ln('M89,119.5h.01 M100,122.5h.01 M111,119.5h.01', GOLD_D, 2.4);
+    // Vòng chân vàng
+    body += [86, 114].map(x => pa(`M${P(x - 9, 137)} Q${P(x, 140)} ${P(x + 9, 137)} L${P(x + 9, 142)} Q${P(x, 145.5)} ${P(x - 9, 142)} Z`, 'url(#gGold)', 2.4) + ci(x, 141, 1.8, '#ff3b4f', 1.2)).join('');
+    // Cầu lửa dưới chân trước
+    body += nghOrb(100, 168, 18, { glow: true, flames: true });
+    body += el(86, 152, 10.5, 6, c.l, 4) + el(114, 152, 10.5, 6, c.l, 4) + ln('M82,156 v-3 M88,156 v-3 M112,156 v-3 M118,156 v-3', OL, 2);
+    // Vòng cổ vàng, chuông vàng
+    body += pa('M74,98 Q100,112 126,98 L127,106 Q100,121 73,106 Z', cel('#ffe066', '#d48a00'), 3.4) + `<g fill="#ff3b4f" stroke="${OL}" stroke-width="1.3">${[[81, 106], [90, 109.5], [110, 109.5], [119, 106]].map(([x, y]) => nghC(x, y, 1.9)).join('')}</g>`;
+    body += nghBell(100, 109, 1.25, '#ffd84a', '#c47a10');
+    // Mây lửa nâng đỡ (trước đùi)
+    front += nghCloud(58, 190, 1.1, 1) + nghCloud(142, 190, 1.1, -1);
+    // Đầu
+    head += bl(nghD(nghPetalD(72, 60, 18, 8.5, 160)) + nghD(nghPetalD(128, 60, 18, 8.5, 20)) + nghE(hx, hy, 31, 26.5) + nghE(hx - 23, hy + 10, 10, 9.5) + nghE(hx + 23, hy + 10, 10, 9.5), cel(c.b, c.s));
+    head += pa(nghPetalD(70, 61, 12, 4.2, 160), c.ear, 0) + pa(nghPetalD(130, 61, 12, 4.2, 20), c.ear, 0) + hl(hx - 20, hy - 13, 6, 2.6, -30, .45);
+    head += nghMark(hx, hy - 10, 14, c);
+    const eo = { white: '#fff59a', glow: '#ffd21f', iris: '#ffb21f', bw: 5 };
+    head += nghEye(hx - 12, hy, 8.4, 8, -1, c, 1, eo) + nghEye(hx + 12, hy, 8.4, 8, 1, c, 1, eo);
+    head += nghBrow(hx - 5.5, hy - 11, -1, 1, c) + nghBrow(hx + 5.5, hy - 11, 1, 1, c);
+    head += nghFace(hx, hy + 1, .84, c, 'open');
+    head += nghCurls([[hx - 9, hy + 27, 5.4, 0, -1], [hx, hy + 29.5, 6, 0, 1], [hx + 9, hy + 27, 5.4, 0, 1]], c, { hl: false, lw: 1.6, sw: 3.5 });
+    front += nghEmbers([[14, 124, 4.5], [186, 62, 4], [20, 50, 3.6], [188, 158, 3.4]]);
+    return { back, body, head, front, anc: nghAnc([hx, 47, 50], [hx, hy, 46], [hx, 100, 48], [100, 104, 92, 66], [100, 122, 44, 42], [hx, 30, 27]) };
+  }
+
+  PET_SPECS.ep_nghe = {
+    el: 'fire',
+    c: NGH[1], c4: NGH[4],
+    draw(f, g, c) { return [null, nghe1, nghe2, nghe3, nghe4][f](NGH[f]); }
+  };
+})();
+
+/* ===================== PET SỬ THI: HẠC BĂNG CỰC QUANG (ep_crane, hệ Băng) ===================== */
+// 4 dạng khác dáng: hạc con trong tổ tuyết → hạc non đứng một chân → hạc múa cánh pha lê → hạc thần cực quang bay lên.
+// Cần: gfx.js (pa, el, ci, ln, hl, bl, tube, P, f1, cel, lin, spark4, crystal, OL) và pets.js (PET_SPECS, PET_LITE, GROUND).
+// Nạp sau pets.js. Mọi hàm phụ nằm trong IIFE (tiền tố crn), không thêm tên toàn cục nào ngoài PET_SPECS.ep_crane.
+// draw(f, g, c) giữ chữ ký chung; g (RIG) bỏ qua vì mỗi dạng có hình học riêng; c = màu (dạng 4 đã gộp c4).
+// anc.halo = [x, y, rx]: vị trí đầu thật cho hiệu ứng hào quang (haloAt đọc). Hạc nhìn sang phải, đầu 3/4.
+(() => {
+  const crnRAD = Math.PI / 180;
+  const crnRot = (s, a, x, y) => `<g transform="rotate(${f1(a)} ${f1(x)} ${f1(y)})">${s}</g>`;
+
+  /* ---------- Hình học ---------- */
+  // Đường cong mượt (Catmull-Rom) qua các điểm
+  function crnCurve(pts, closed = false) {
+    const n = pts.length, get = i => closed ? pts[(i + n) % n] : pts[Math.max(0, Math.min(n - 1, i))];
+    let d = `M${P(...pts[0])}`;
+    for (let i = 0; i < (closed ? n : n - 1); i++) {
+      const p0 = get(i - 1), p1 = get(i), p2 = get(i + 1), p3 = get(i + 2);
+      d += ` C${P(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)} ${P(p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)} ${P(...p2)}`;
+    }
+    return d + (closed ? ' Z' : '');
+  }
+  // Dải thuôn theo đường tâm pts, bề rộng wf(t) (t: 0 gốc → 1 mũi). Trả { d, L, R } (viền kín, mép trái, mép phải)
+  function crnRibbon(pts, wf) {
+    const n = pts.length - 1, L = [], R = [];
+    pts.forEach((p, i) => {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy) || 1, w = wf(i / n) / 2;
+      L.push([p[0] - dy / m * w, p[1] + dx / m * w]); R.push([p[0] + dy / m * w, p[1] - dx / m * w]);
+    });
+    const ring = L.concat(R.slice().reverse().slice(wf(1) < .6 ? 1 : 0));
+    return { d: crnCurve(ring, true), L, R };
+  }
+  // Viền lông xù: cung elip a0→a1 (độ) gồm n gợn phồng ra ngoài k
+  function crnFluff(cx, cy, rx, ry, n, k = .1, a0 = 0, a1 = 360) {
+    const pt = a => [cx + rx * Math.cos(a * crnRAD), cy + ry * Math.sin(a * crnRAD)], st = (a1 - a0) / n;
+    let d = `M${P(...pt(a0))}`;
+    for (let i = 0; i < n; i++) { const m = pt(a0 + (i + .5) * st); d += ` Q${P(cx + (m[0] - cx) * (1 + k * 2), cy + (m[1] - cy) * (1 + k * 2))} ${P(...pt(a0 + (i + 1) * st))}`; }
+    return d;
+  }
+  // Lông vũ: gốc (x, y), hướng a (độ), dài L, rộng w. shard: lông pha lê cạnh gãy có mặt cắt
+  function crnFeather(x, y, a, L, w, fill, sw = 3.5, shard = false, edge = '') {
+    const ux = Math.cos(a * crnRAD), uy = Math.sin(a * crnRAD), p = (t, k) => P(x + ux * L * t - uy * w * k, y + uy * L * t + ux * w * k);
+    const d = shard ? `M${p(0, -.5)} L${p(.6, -.62)} L${p(1, 0)} L${p(.72, .56)} L${p(0, .5)} Z`
+      : `M${p(0, -.5)} Q${p(.62, -.78)} ${p(1, 0)} Q${p(.6, .72)} ${p(0, .5)} Z`;
+    let s = pa(d, fill, sw);
+    if (shard) s += ln(`M${p(.1, .05)} L${p(.6, -.62)} M${p(.15, .1)} L${p(.9, .02)}`, '#ffffff', 1.5, 'opacity=".85"');
+    else if (edge) s += ln(`M${p(.62, .6)} Q${p(.86, .4)} ${p(.98, .04)}`, edge, 2.2);
+    return s;
+  }
+  // Lông cong dài (cực quang): gốc (x, y), hướng a, dài L, rộng w, cong bend (lệch ngang ở giữa); có cuống lông sáng
+  function crnPlume(x, y, a, L, w, fill, bend = 0) {
+    const ux = Math.cos(a * crnRAD), uy = Math.sin(a * crnRAD), p = (t, k, b = 0) => P(x + ux * L * t - uy * (w * k + b), y + uy * L * t + ux * (w * k + b));
+    return pa(`M${p(0, -.42)} Q${p(.55, -.7, bend)} ${p(1, 0, bend * .3)} Q${p(.55, .66, bend)} ${p(0, .42)} Z`, fill, 3.4) +
+      ln(`M${p(.06, 0)} Q${p(.55, 0, bend * .9)} ${p(.88, 0, bend * .45)}`, '#ffffff', 1.8, 'opacity=".75"');
+  }
+  // Bông tuyết 6 cánh có viền
+  function crnFlake(x, y, r, col = '#ffffff', cls = '', dl = 0) {
+    let d = '';
+    for (let i = 0; i < 6; i++) {
+      const a = (i * 60 - 90) * crnRAD, bx = x + Math.cos(a) * r * .55, by = y + Math.sin(a) * r * .55;
+      d += `M${P(x, y)}L${P(x + Math.cos(a) * r, y + Math.sin(a) * r)}`;
+      if (r > 5.5) for (const k of [-1, 1]) { const b = a + k * .8; d += `M${P(bx, by)}l${f1(Math.cos(b) * r * .38)},${f1(Math.sin(b) * r * .38)}`; }
+    }
+    const w = Math.max(1.6, r * .26);
+    return `<g${cls ? ` class="${cls}" style="animation-delay:-${dl}s"` : ''}>` + ln(d, OL, w + 3.2) + ln(d, col, w) + `</g>`;
+  }
+
+  /* ---------- Đầu hạc (nhìn sang phải, góc 3/4) ---------- */
+  function crnEye(cx, cy, rx, ry, side, o) {
+    const pr = o.pr || rx * .52, lid = o.lid || 0, px = cx + rx * .2, py = cy + ry * .1;
+    let s = '';
+    if (o.glow) s += el(cx, cy, rx + 3, ry + 3, o.glow, 0, 'opacity=".55"');
+    s += el(cx, cy, rx, ry, '#fff', 3.8);
+    if (o.iris) s += ci(px, py, pr * 1.42, o.iris, 0);
+    s += ci(px, py, pr, OL, 0) + ci(px - pr * .42, py - pr * .5, pr * .44, '#fff', 0) + ci(px + pr * .5, py + pr * .45, pr * .2, '#fff', 0);
+    if (lid > 0) {
+      // mí trầm tĩnh: gần ngang, chỉ hơi thấp về phía trong (uy nghi mà không cau có)
+      const ao = 198 + (1 - lid) * 26, ai = 344 - (1 - lid) * 14, a1 = side < 0 ? ao : 540 - ao, a2 = side < 0 ? ai : 540 - ai;
+      const Q = a => [cx + rx * Math.cos(a * crnRAD), cy + ry * Math.sin(a * crnRAD)], [x1, y1] = Q(a1), [x2, y2] = Q(a2);
+      s += `<path d="M${P(x1, y1)} A${f1(rx)},${f1(ry)} 0 0 ${side < 0 ? 1 : 0} ${P(x2, y2)} Z" fill="${o.skin}"/>`;
+      const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+      s += ln(`M${P(x1 - ux * 3.5, y1 - uy * 3.5 - 1)} Q${P((x1 + x2) / 2, (y1 + y2) / 2 - 1.6)} ${P(x2 + ux * 2, y2 + uy * 2)}`, OL, o.bw || 5);
+    }
+    // hàng mi cong ở đuôi mắt: nét thanh tao riêng của hạc
+    if (o.lash === false) return s;
+    const ox = cx + side * rx * .9, oy = cy - ry * (lid > 0 ? .5 : .55);
+    s += ln(`M${P(ox, oy)} q${f1(side * 3)},-1 ${f1(side * 5.5)},-5`, OL, 2.6);
+    return s;
+  }
+  // Mỏ bạc mũi băng: gốc (x, y), góc a (độ, 0 = sang phải), dài len, dày th
+  function crnBeak(x, y, len, a, th, c) {
+    const ux = Math.cos(a * crnRAD), uy = Math.sin(a * crnRAD), p = (t, k) => P(x + ux * len * t - uy * th * k, y + uy * len * t + ux * th * k);
+    return pa(`M${p(0, -.55)} C${p(.35, -.62)} ${p(.75, -.3)} ${p(1, .06)} C${p(.7, .3)} ${p(.35, .5)} ${p(0, .5)} Z`, cel(c.beak, c.beaks), 3.6) +
+      pa(`M${p(.74, -.27)} C${p(.86, -.16)} ${p(.95, -.05)} ${p(1, .06)} C${p(.92, .14)} ${p(.84, .2)} ${p(.76, .24)} Z`, c.cyan, 0) +
+      ln(`M${p(.06, .1)} Q${p(.45, .2)} ${p(.8, .12)}`, OL, 1.8) + ln(`M${p(.14, -.32)} Q${p(.4, -.38)} ${p(.62, -.24)}`, '#ffffff', 2, 'opacity=".9"');
+  }
+  // f: dạng; o.turn: 0 nhìn thẳng → 1 nghiêng; o.beak: [dài, góc]
+  function crnHead(cx, cy, R, f, c, o = {}) {
+    const ry = R * .95, t = o.turn ?? .8, [bl_, ba] = o.beak || [R * 1.1, 8];
+    let s = o.noBlob ? '' : el(cx, cy, R, ry, cel(c.b, c.s), 5);
+    if (f >= 2) {
+      const k = R - 2.7, ky = ry - 2.7, A = a => P(cx + k * Math.cos(a * crnRAD), cy + ky * Math.sin(a * crnRAD));
+      // đỉnh đầu ánh hồng cực quang (dấu hạc)
+      s += `<path d="M${A(-138)} A${f1(k)},${f1(ky)} 0 0 1 ${A(-52)} Q${P(cx - R * .02, cy - ry * .56)} ${P(cx - R * .5, cy - ry * .66)} Z" fill="${cel(c.cr, c.crs)}"/>`;
+      s += hl(cx - R * .16, cy - ry * .8, R * .14, R * .06, -10, .75);
+      // cổ họng tím than (nối xuống cổ)
+      s += `<path d="M${A(38)} A${f1(k)},${f1(ky)} 0 0 1 ${A(104)} Q${P(cx + R * .1, cy + ry * .62)} ${P(cx + R * .5, cy + ry * .5)} Z" fill="${cel(c.nk, c.nks)}"/>`;
+    }
+    s += hl(cx - R * .55, cy - ry * .4, R * .2, R * .1, -45, .55);
+    const er = [0, .37, .31, .29, .29][f] * R, ey = cy - ry * .06, nx = cx - R * (.22 + .1 * (1 - t)), fx = cx + R * (.36 - .08 * (1 - t));
+    const eo = { skin: c.b, iris: c.i, lid: [0, 0, .22, .5, .66][f], bw: f >= 4 ? 5 : 4 };
+    if (f === 1) { eo.pr = er * .5; eo.lash = false; }
+    if (f >= 4) { eo.glow = c.glow; eo.iris = c.i4; }
+    s += crnEye(nx, ey, er * .86, er, -1, eo) + crnEye(fx, ey - 1, er * .7, er * .95, 1, eo);
+    s += f === 1 ? crnBeak(cx + R * .56, cy + R * .3, bl_, ba, R * .32, c) : crnBeak(cx + R * .62, cy + R * .3, bl_, ba, R * .32, c);
+    if (f <= 2) s += el(nx - R * .1, ey + er + 4, R * .17, R * .1, '#ff9ab4', 0, 'opacity=".75"');
+    return s;
+  }
+
+  // Vương miện băng: vành bạc cong theo đỉnh đầu + 5 gai pha lê (một hình) + ngọc cực quang
+  function crnCrown(x, y, c) {
+    const sp = [[-15, 10, -26], [-8, 16, -12], [0, 23, 0], [8, 16, 12], [15, 10, 26]];
+    let d = `M${P(x - 18, y + 4)}`, f = '';
+    sp.forEach(([dx, h, a]) => {
+      const bx = x + dx, by = y + 2 - Math.abs(dx) * .12, w = 4 + h * .06, ux = Math.sin(a * crnRAD), uy = -Math.cos(a * crnRAD);
+      const tip = [bx + ux * h, by + uy * h], sh = [bx + ux * h * .62, by + uy * h * .62];
+      d += ` L${P(bx - w, by)} L${P(sh[0] - w * .9, sh[1])} L${P(...tip)} L${P(sh[0] + w * .9, sh[1])} L${P(bx + w, by)}`;
+      f += `M${P(bx - w * .2, by - 1)} L${P(tip[0] - ux * 3, tip[1] - uy * 3)} `;
+    });
+    d += ` L${P(x + 18, y + 4)} Z`;
+    return pa(d, cel(c.ice, c.ices), 3.2) + ln(f, '#ffffff', 1.4, 'opacity=".85"') +
+      pa(`M${P(x - 19, y + 3)} Q${P(x, y - 4)} ${P(x + 19, y + 3)} L${P(x + 18, y + 8)} Q${P(x, y + 1)} ${P(x - 18, y + 8)} Z`, cel(c.sil, c.sils), 3) +
+      ci(x, y + 3, 3.6, lin(c.pink, c.vio), 2.2) + ci(x - 11, y + 5, 1.8, c.cyan, 1.4) + ci(x + 11, y + 5, 1.8, c.mint, 1.4);
+  }
+
+  /* ---------- Thân, chân, cánh ---------- */
+  // Chân dài mảnh: các khớp pts, bàn chân ở điểm cuối (toes: 'stand' | 'curl' | 'point')
+  function crnLeg(pts, w, c, toes = 'stand') {
+    const d = `M${pts.map(p => P(...p)).join(' L')}`, [x, y] = pts[pts.length - 1];
+    let s = ln(d, OL, w + 7) + ln(d, c.leg, w) + ln(d, c.legs, w * .38, 'opacity=".7" transform="translate(1.2 0)"');
+    // khớp gối (cổ chân) hơi phình
+    s += pts.slice(1, -1).map(([jx, jy]) => el(jx, jy, w * .62, w * .72, c.leg, 0)).join('');
+    let t = '';
+    if (toes === 'stand') t = `M${P(x, y)} l11,1.5 M${P(x, y)} l4,4 M${P(x, y)} l-7,2.5 M${P(x, y)} l-4,-3`;
+    else if (toes === 'curl') t = `M${P(x, y)} q5,0 6,4 M${P(x, y)} q2,2 1,6 M${P(x, y)} q-3,1 -4,4`;
+    else t = `M${P(x, y)} l1,8 M${P(x, y)} l-3,7 M${P(x, y)} l5,6`;
+    return s + ln(t, OL, w * .62 + 5) + ln(t, c.leg, w * .62);
+  }
+  // Cổ tím than cong chữ S + dải gáy trắng (nét nhận diện của hạc)
+  function crnNeck(pts, w0, w1, c) {
+    const r = crnRibbon(pts, t => w0 + (w1 - w0) * t), n = pts.length - 1;
+    const nape = pts.map((p, i) => [p[0] * .45 + r.L[i][0] * .55, p[1] * .45 + r.L[i][1] * .55]).slice(Math.floor(n / 2));
+    const rr = crnRibbon(nape, t => (w0 + (w1 - w0) * (.5 + t * .5)) * (.25 + t * .3));
+    return pa(r.d, cel(c.nk, c.nks), 5) + pa(rr.d, c.b, 0) + ln(crnCurve(r.R.slice(1, -1)), '#7f9aff', 2, 'opacity=".75"');
+  }
+  // Thân trứng nghiêng
+  const crnBody = (x, y, rx, ry, a, c) => el(x, y, rx, ry, cel(c.b, c.s), 5.5, `transform="rotate(${a} ${x} ${y})"`) + hl(x - rx * .35, y - ry * .5, rx * .28, ry * .12, -20 + a, .5);
+  // Mép gợn lông từ (x0, y0) tới (x1, y1): n gợn, dep > 0 phồng sang trái hướng đi
+  function crnScallop(x0, y0, x1, y1, n, dep) {
+    const dx = (x1 - x0) / n, dy = (y1 - y0) / n, L = Math.hypot(dx, dy), nx = -dy / L * dep, ny = dx / L * dep;
+    let d = ` L${P(x0, y0)}`;
+    for (let i = 0; i < n; i++) d += ` Q${P(x0 + dx * (i + .5) + nx, y0 + dy * (i + .5) + ny)} ${P(x0 + dx * (i + 1), y0 + dy * (i + 1))}`;
+    return d;
+  }
+  // Vảy lông nhỏ trên ngực / cánh
+  const crnScales = (pts, col, w = 2.2) => ln(pts.map(([x, y, r]) => `M${P(x - r, y)} q${f1(r)},${f1(r * .9)} ${f1(r * 2)},0`).join(' '), col, w);
+  // Dải lụa đuôi: bề rộng đều, đuôi cắt chữ V
+  function crnSash(pts, w, fill) {
+    const r = crnRibbon(pts, () => w), n = pts.length - 1, e = pts[n], q = pts[n - 1], dx = e[0] - q[0], dy = e[1] - q[1], m = Math.hypot(dx, dy);
+    const notch = [e[0] - dx / m * w * .7, e[1] - dy / m * w * .7];
+    const d = crnCurve(r.L) + ` L${P(...notch)} L${P(...r.R[n])} ` + crnCurve(r.R.slice().reverse()).replace('M', 'L') + ' Z';
+    return pa(d, fill, 4) + ln(crnCurve(pts.slice(0, -1).map((p, i) => [(p[0] + r.L[i][0]) / 2, (p[1] + r.L[i][1]) / 2])), '#ffffff', 2.2, 'opacity=".9"');
+  }
+  // Dải cực quang thuôn (lông mào dạng 4): gradient dọc 2 màu, viền tím than, vệt sáng giữa
+  function crnAuroraBand(pts, w0, w1, c1, c2, sw = 3.5) {
+    const r = crnRibbon(pts, t => w0 + (w1 - w0) * Math.pow(t, 1.3) + Math.sin(t * Math.PI) * 3);
+    return pa(r.d, lin(c1, c2), sw) + ln(crnCurve(pts.slice(0, -1).map((p, i) => [(p[0] * 2 + r.L[i][0]) / 3, (p[1] * 2 + r.L[i][1]) / 3])), '#ffffff', 1.8, 'opacity=".7"');
+  }
+
+  // Cánh dang dựng trong khung riêng (vai tại gốc, dọc trục x, mép trước ở trên) rồi xoay rot độ và lật theo sd (-1 trái, 1 phải).
+  // kind 3: lông sơ cấp pha lê + lông thứ cấp tím than; kind 4: 7 lông cực quang dài rủ xuống + 3 lông pha lê ở mũi cánh.
+  // bend: gập cổ tay (độ, âm = mũi cánh vểnh lên)
+  function crnWing(sx, sy, sd, rot, c, kind, bend = 0) {
+    const rowCol = kind === 4 ? c.cyan : c.s, cr = Math.cos(rot * crnRAD), sr = Math.sin(rot * crnRAD), xw = 44;
+    // gập cổ tay: góc gập tăng mượt quanh khuỷu (xw), không làm đứt nét
+    const bA = x => { const t = Math.max(0, Math.min(1, (x - xw + 12) / 24)); return bend * t * t * (3 - 2 * t); };
+    const M = (x, y) => {
+      const b = bA(x) * crnRAD, dx = x - xw, X = xw + dx * Math.cos(b) - y * Math.sin(b), Y = dx * Math.sin(b) + y * Math.cos(b);
+      return [sx + sd * (X * cr - Y * sr), sy + X * sr + Y * cr];
+    };
+    const A = (a, x = 0) => sd > 0 ? a + bA(x) + rot : 180 - a - bA(x) - rot;
+    let s = '';
+    if (kind === 3) {
+      for (let i = 5; i >= 0; i--) { const [x, y] = M(4 + i * 7.5, 4 - i); s += crnFeather(x, y, A(100 - i * 7, 4 + i * 7.5), 27 + i * 1.6, 14, cel(c.nk, c.nks), 3.5); }
+      for (let i = 4; i >= 0; i--) { const t = i / 4, [x, y] = M(46 + t * 20, -4 - t * 6); s += crnFeather(x, y, A(64 - t * 62, 46 + t * 20), 28 + t * 12, 12, cel(c.ice, c.ices), 3.5, true); }
+    } else {
+      // lông bay cực quang: 7 lông dài cong rủ xuống, ngoài (bạc hà) → trong (hồng tím), lông trong đè lên lông ngoài
+      const cols = [['#d6fff0', c.mint], [c.mint, c.cyan], [c.mint, c.cyan], [c.cyan, '#5f8bff'], [c.cyan, c.vio], [c.vio, c.pink], ['#b48aff', c.pink]];
+      for (let i = 6; i >= 0; i--) {
+        const k = i / 6, [x, y] = M(4 + k * 70, 14 - k * 20);
+        s += crnPlume(x, y, sd > 0 ? 96 - k * 22 : 84 + k * 22, 52 + k * 24 - (i % 2) * 6, 21 - k * 3, lin(cols[6 - i][0], cols[6 - i][1]), sd * (5 + k * 4));
+      }
+      for (let i = 2; i >= 0; i--) { const [x, y] = M(66 + i * 6, -8 - i * 2); s += crnFeather(x, y, A(30 - i * 22, 80), 20 + i * 2, 10, cel(c.ice, c.ices), 3.2, true); }
+    }
+    // lông phủ trắng: mép trước cong, mép sau hai hàng gợn
+    const top = [[-6, 8], [-5, -8], [18, -17], [44, -18], [66, -14], [84, -6]].map(p => M(...p)), e = M(84, -6), b = M(0, 20);
+    s += pa(crnCurve(top) + crnScallop(...e, ...b, 6, -6 * sd) + ' Z', cel(c.b, c.s), 4.5);
+    s += ln(`M${P(...M(66, -6))}` + crnScallop(...M(66, -6), ...M(6, 8), 5, -4.5 * sd), rowCol, 2.2);
+    const [hx, hy] = M(30, -10);
+    s += hl(hx, hy, 12, 2.6, sd > 0 ? rot - 4 : 184 - rot, .6);
+    // vỗ cánh nhẹ quanh vai: mượn lớp .pt sẵn có (xoay -5° → 6°), chỉ đổi tâm xoay, nhịp và chiều (cánh trái ngược pha để hai cánh đối xứng).
+    // Bóng đen bỏ class nên không động; prefers-reduced-motion tắt .pt; trại chung (PET_LITE) không vỗ.
+    return PET_LITE ? s : `<g class="pt" style="transform-box:view-box;transform-origin:${f1(sx)}px ${f1(sy)}px;animation-duration:${kind === 4 ? 2.6 : 2.2}s${sd < 0 ? ';animation-direction:alternate-reverse' : ''}">${s}</g>`;
+  }
+
+  /* ---------- Hiệu ứng dạng 4 ---------- */
+  const crnAU = ['#6dffc8', '#33e1ff', '#b48aff', '#ff8ae0'];
+  function crnSwirl(cx, cy, R, n, seed) {
+    if (PET_LITE) return '';
+    let s = '';
+    for (let i = 0; i < n; i++) {
+      const a = (i * 360 / n + seed) * crnRAD, x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R * .92;
+      s += i % 2 ? crnFlake(x, y, 5 + (i % 3) * 1.2, i % 4 === 1 ? '#bff4ff' : '#ffffff') : ci(x, y, 3, '#ffffff', 2);
+      const a0 = a + .2, a1 = a + .6, r2 = R - 5 - (i % 3) * 4;
+      const d = `M${P(cx + Math.cos(a0) * r2, cy + Math.sin(a0) * r2 * .92)} A${f1(r2)},${f1(r2 * .92)} 0 0 1 ${P(cx + Math.cos(a1) * r2, cy + Math.sin(a1) * r2 * .92)}`;
+      s += ln(d, OL, 6, 'opacity=".5"') + ln(d, i % 3 ? '#ffffff' : crnAU[i % 4], 2.8);
+    }
+    return `<g class="spin" style="transform-origin:${f1(cx)}px ${f1(cy)}px">${s}</g>`;
+  }
+  function crnMotes(spots) {
+    if (PET_LITE) return '';
+    return `<g class="motes">` + spots.map(([x, y, r], i) => i % 2 ? crnFlake(x, y, r, '#ffffff', 'twinkle', i * .4) : spark4(x, y, r, crnAU[i % 4], 1.8, 'twinkle', i * .35)).join('') + `</g>`;
+  }
+
+  /* ---------- Neo ---------- */
+  // h: đầu [x, đỉnh, rộng]; e: mắt [x, y, rộng]; n: cổ [x, y, rộng]; t: thân [x, đỉnh, đáy, rộng]; hc: tâm đầu [x, y, bán kính]
+  function crnAnc(h, e, n, t, hc, bk) {
+    const [tx, ty, tb, tw] = t;
+    return {
+      head: h, eyes: e, neck: n,
+      back: bk || [tx, ty, tw, (GROUND - 4 - ty) / 1.11],
+      body: [tx, ty + (tb - ty) * .42, tw, tb - ty],
+      halo: [hc[0], f1(h[1] - 8), f1(hc[2] * .72)]
+    };
+  }
+
+  /* ======================== 4 DẠNG ======================== */
+  const crnForms = [null,
+    // 1. Hạc con lông tơ ngồi trong tổ tuyết, chỏm tơ cực quang, một cánh nhỏ vẫy
+    (c) => {
+      let back = '', body = '', head = '', front = '';
+      const cx = 100, hy = 108, R = 32, fz = Object.assign({}, c, { b: c.fz, s: c.fzs });
+      // vành sau của tổ: lòng tổ tối + tuyết phủ mép sau + tinh thể băng
+      back += el(100, 153, 50, 10, '#4a62b6', 0);
+      back += pa(crnFluff(100, 152, 58, 13, 10, .09, 180, 360) + crnFluff(100, 153, 49, 9, 1, 0, 360, 180).replace('M', ' L') + ' Z', cel('#ffffff', '#b9d6f2'), 4);
+      back += [[60, 146, -30, 18], [80, 142, -10, 14], [122, 141, 12, 16]].map(([x, y, a, h]) => crnRot(crystal(x, y, h, h * .5, c.ice, c.ices, 3), a, x, y)).join('');
+      // nửa vỏ trứng vừa nở, viền răng cưa, vân cực quang
+      back += `<g transform="translate(96 -12) rotate(20 54 150)">` + pa('M42,140 Q42,156 54,158 Q66,156 66,140 L62,145 L58,139 L54,145 L50,139 L46,145 Z', cel('#ffffff', '#c9dcf5'), 3.5) + ln('M45,150 l4,-3 l4,3 l4,-3 l4,3 l3,-2', c.mint, 2.4) + ci(52, 154, 1.6, c.pink, 0) + '</g>';
+      // thân lông tơ + cánh trái giơ vẫy
+      body += pa(crnFluff(100, 150, 32, 24, 14, .05) + ' Z', cel(c.fz, c.fzs), 5);
+      body += crnRot(pa(crnFluff(66, 130, 8.5, 15, 6, .1) + ' Z', cel(c.fz, c.fzs), 4.5), 40, 66, 140);
+      body += crnScales([[90, 148, 4], [104, 149, 4], [97, 158, 4]], c.fzs, 2);
+      // chỏm tơ cực quang (3 sợi xoăn) + đầu tơ
+      head += [[-11, 17, -34], [0, 23, -6], [11, 16, 24]].map(([dx, h, a]) => {
+        const x = cx + dx, y = hy - R + 8;
+        return crnRot(pa(`M${P(x - 5, y)} C${P(x - 7, y - h * .6)} ${P(x + 4, y - h)} ${P(x + 8, y - h * .8)} C${P(x + 2, y - h * .72)} ${P(x + 1, y - h * .3)} ${P(x + 5, y)} Z`, lin(c.mint, c.cyan), 3.5), a * .6, x, y);
+      }).join('');
+      head += pa(crnFluff(cx, hy, R, R * .95, 16, .035) + ' Z', cel(c.fz, c.fzs), 5);
+      head += crnHead(cx, hy, R, 1, fz, { turn: .45, beak: [13, 10], noBlob: true });
+      // tổ phía trước: lòng tổ đan que bạc, mép tuyết xù mỏng, cánh phải vịn mép tổ
+      front += pa(`M${P(42, 152)} C${P(42, 176)} ${P(70, 190)} ${P(100, 190)} C${P(130, 190)} ${P(158, 176)} ${P(158, 152)}` + crnFluff(100, 152, 58, 13, 1, 0, 0, 180).replace('M', ' L') + ' Z', cel('#9fc2f2', '#5a78cc'), 5);
+      front += ln('M50,166 Q70,178 98,176 Q122,175 150,164 M56,178 Q82,187 112,184 Q132,182 146,174 M64,160 Q70,170 80,174 M136,160 Q130,172 120,178 M100,168 Q104,178 98,188', '#e6eefc', 2.6, 'opacity=".9"');
+      front += ln('M46,160 Q66,176 92,170 M110,172 Q134,172 154,158 M72,184 Q96,178 126,186', '#5a72c4', 2.2);
+      front += pa(crnFluff(100, 152, 60, 15, 10, .1, 0, 180) + crnFluff(100, 151, 55, 11, 1, 0, 180, 0).replace('M', ' L') + ' Z', cel('#ffffff', '#c4dcf5'), 4);
+      front += crnRot(pa(crnFluff(132, 152, 8, 14, 6, .1) + ' Z', cel(c.fz, c.fzs), 4.5), -66, 132, 152);
+      front += crnRot(crystal(46, 164, 15, 8, c.ice, c.ices, 3), -62, 46, 164) + crnRot(crystal(156, 162, 14, 7, c.ice, c.ices, 3), 60, 156, 162);
+      front += tube('M44,158 l-9,-5 M47,163 l-8,3 M154,156 l10,-6 M152,163 l9,2', c.sil, 2.4, 2.2);
+      front += hl(66, 170, 9, 2.4, 14, .55) + spark4(118, 180, 4, '#ffffff', 1.6);
+      const anc = crnAnc([cx, hy - R + 4, 60], [cx + 2, hy - 2, 50], [cx, hy + 26, 50], [cx, 124, 154, 56], [cx, hy, R], [cx, 128, 62, 40]);
+      return { back, body, head, front, anc };
+    },
+    // 2. Hạc non chân dài đứng một chân, cổ cong chữ S, mào băng nhỏ, khoen bạc ở chân
+    (c) => {
+      let back = '', body = '', head = '', front = '';
+      const hx = 118, hy = 50, R = 24;
+      body += crnLeg([[103, 132], [102, 160], [101, 185]], 5, c, 'stand');
+      body += crnLeg([[90, 134], [78, 152], [95, 150]], 4.6, c, 'curl');
+      // chùm lông đuôi tím than rủ xuống (sau thân)
+      body += [[196, 28], [182, 31], [168, 27], [156, 22]].map(([a, L], i) => crnFeather(74 - i, 116 + i * 3, a, L, 13, cel(c.nk, c.nks), 3.5, false, '#7f9aff')).join('');
+      body += crnBody(97, 118, 30, 19, -14, c);
+      // cánh xếp: phủ trắng, mép gợn hai hàng
+      body += pa(`M${P(124, 108)} C${P(112, 96)} ${P(80, 98)} ${P(66, 114)}` + crnScallop(66, 116, 122, 124, 5, 6) + ' Z', cel(c.b, c.s), 4);
+      body += ln(`M${P(110, 108)}` + crnScallop(110, 108, 80, 110, 3, -4), c.s, 2);
+      body += crnNeck([[114, 110], [104, 94], [104, 80], [112, 68]], 13, 10, c);
+      // khoen bạc ở chân
+      body += `<rect x="96.6" y="170" width="9.6" height="5" rx="2" fill="${cel(c.sil, c.sils)}" stroke="${OL}" stroke-width="2.4"/>` + ci(101.4, 172.5, 1.6, c.mint, 0);
+      // Đầu: mào băng nhỏ vuốt ra sau
+      head += [[-11, 16, -50], [-4, 22, -32], [4, 15, -14]].map(([dx, h, a]) => { const x = hx + dx, y = hy - R + 6; return crnRot(crystal(x, y, h, 8, c.ice, c.ices, 3.2), a, x, y); }).join('');
+      head += crnHead(hx, hy, R, 2, c, { beak: [27, 8] });
+      const anc = crnAnc([hx, hy - R + 4, 52], [hx + 2, hy - 2, 42], [108, 84, 26], [97, 102, 136, 58], [hx, hy, R], [97, 102, 58, 42]);
+      return { back, body, head, front, anc };
+    },
+    // 3. Hạc trưởng thành múa: cánh dang chữ V có lông pha lê, đuôi dải băng, một chân co
+    (c) => {
+      let back = '', body = '', head = '', front = '';
+      const hx = 114, hy = 46, R = 23;
+      // đuôi: hai dải lụa băng bay sang trái
+      back += crnSash([[84, 136], [62, 150], [42, 172], [20, 172], [10, 160]], 10, lin('#ffffff', '#bff4ff', '#6fcff2'));
+      back += crnSash([[88, 142], [72, 166], [54, 184], [32, 190]], 9, lin('#ffffff', '#c9f6ff', '#8fdcf7'));
+      back += crnWing(86, 104, -1, -40, c, 3) + crnWing(116, 100, 1, -40, c, 3);
+      body += crnLeg([[98, 142], [99, 164], [98, 185]], 5.2, c, 'stand');
+      body += crnLeg([[108, 140], [126, 154], [119, 170]], 4.8, c, 'point');
+      body += [[178, 26], [164, 28], [150, 24]].map(([a, L], i) => crnFeather(84 - i * 2, 130 + i * 4, a, L, 13, cel(c.nk, c.nks), 3.5, false, '#7f9aff')).join('');
+      body += crnBody(100, 121, 23, 27, -22, c);
+      body += crnScales([[92, 124, 4], [104, 120, 4], [98, 134, 4], [110, 130, 3.5]], c.s, 2);
+      body += crnNeck([[108, 100], [100, 86], [102, 72], [110, 60]], 13, 10, c);
+      // vòng cổ bạc
+      body += pa(`M${P(96, 97)} Q${P(108, 104)} ${P(119, 96)} L${P(120, 101)} Q${P(108, 110)} ${P(96, 102)} Z`, cel(c.sil, c.sils), 3) + ci(108, 106, 3, c.cyan, 2);
+      // Đầu: lông mào pha lê dài vuốt ra sau
+      head += [[206, 30], [220, 24], [192, 22]].map(([a, L]) => crnFeather(hx - 8, hy - R + 5, a, L, 9, cel(c.ice, c.ices), 3.2, true)).join('');
+      head += crnHead(hx, hy, R, 3, c, { beak: [28, -2] });
+      const anc = crnAnc([hx, hy - R + 4, 50], [hx + 2, hy - 2, 40], [108, 98, 28], [100, 98, 148, 50], [hx, hy, R], [100, 98, 52, 48]);
+      return { back, body, head, front, anc };
+    },
+    // 4. Hạc thần cực quang bay lên: cánh cong vút rủ lông cực quang, vương miện băng, quạt đuôi cực quang, tuyết xoáy, vỗ cánh nhẹ
+    (c) => {
+      let back = '', body = '', head = '', front = '';
+      const hx = 106, hy = 46, R = 23;
+      if (!PET_LITE) back += `<circle cx="100" cy="100" r="90" fill="${lin('#6dffc8', '#33e1ff', '#8a5cff')}" opacity=".16"/>`;
+      back += crnSwirl(100, 104, 90, 7, 15);
+      // đuôi: quạt lông cực quang buông dưới thân (thay chân, vì đang bay lên), hai lông ngoài cong ra như dải lụa
+      const tc = [[c.mint, c.cyan], [c.cyan, c.vio], [c.vio, c.pink], [c.cyan, c.vio], [c.mint, c.cyan]];
+      [[0, 130, 46, 6], [4, 110, 52, -3], [2, 90, 58, 0], [1, 70, 52, 3], [3, 50, 46, -6]].forEach(([ci_, a, L, b]) => back += crnPlume(100, 130, a, L, 15, lin(...tc[ci_]), b));
+      back += crnWing(86, 98, -1, -24, c, 4, -26) + crnWing(114, 98, 1, -24, c, 4, -26);
+      body += crnBody(100, 114, 24, 28, -4, c);
+      body += crnScales([[92, 112, 4], [104, 110, 4], [98, 122, 4]], '#7fd6f5', 2);
+      body += crnNeck([[100, 92], [97, 80], [100, 68], [104, 60]], 13, 10, c);
+      // vòng cổ bạc đính ngọc cực quang
+      body += pa(`M${P(86, 90)} Q${P(100, 100)} ${P(114, 90)} L${P(115, 96)} Q${P(100, 108)} ${P(85, 96)} Z`, cel(c.sil, c.sils), 3) + pa(`M${P(100, 98)} L${P(106, 105)} L${P(100, 114)} L${P(94, 105)} Z`, lin(c.mint, c.vio), 2.6) + hl(98, 103, 1.6, 3, 0, .8);
+      // Đầu: lông mào cực quang dài + vương miện băng
+      head += crnAuroraBand([[hx - 10, hy - 14], [hx - 28, hy - 24], [hx - 46, hy - 20], [hx - 58, hy - 28]], 8, 1.5, c.mint, c.cyan, 3) + crnAuroraBand([[hx - 12, hy - 10], [hx - 28, hy - 12], [hx - 42, hy - 4], [hx - 54, hy - 8]], 7, 1.5, c.vio, c.pink, 3);
+      head += crnHead(hx, hy, R, 4, c, { beak: [26, -6] });
+      head += crnCrown(hx, hy - R + 4, c);
+      front += crnMotes([[18, 30, 6], [182, 100, 5], [22, 128, 5.5], [178, 18, 6], [150, 152, 4.5], [48, 184, 4.5]]);
+      const anc = crnAnc([hx, hy - R - 2, 46], [hx + 2, hy - 3, 40], [100, 92, 30], [100, 88, 140, 50], [hx, hy, R], [100, 90, 52, 46]);
+      anc.halo = [hx, hy - R - 10, 20];
+      return { back, body, head, front, anc };
+    }
+  ];
+
+  PET_SPECS.ep_crane = {
+    el: 'ice',
+    c: {
+      b: '#f6fbff', s: '#a8c4ea', fz: '#eaf5ff', fzs: '#9fbfe8', nk: '#3b4cc0', nks: '#212a7e', cr: '#ff6ad5', crs: '#c22c9a',
+      i: '#33e1ff', i4: '#9dfff0', glow: '#7dffcf', beak: '#eef3ff', beaks: '#8c9cc8', leg: '#4656c4', legs: '#262f86',
+      ice: '#e6fbff', ices: '#6fcff2', sil: '#eef3fa', sils: '#8d9cc0', mint: '#6dffc8', cyan: '#33e1ff', vio: '#8a5cff', pink: '#ff6ad5'
+    },
+    c4: { s: '#93b0e6', nk: '#3242b4', nks: '#18206a', cr: '#ff4fd0', leg: '#3d4cb8' },
+    draw(f, g, c) {
+      const r = crnForms[f](c), pk = v => v ? `<g stroke-linejoin="round" stroke-linecap="round">${v.replace(/ stroke-linejoin="round" stroke-linecap="round"| stroke-linecap="round" stroke-linejoin="round"/g, '')}</g>` : '';
+      return { back: pk(r.back), body: pk(r.body), head: pk(r.head), front: pk(r.front), anc: r.anc };
+    }
+  };
+})();
+
+/* ===================== SỬ THI · THANH LONG SẤM (id ep_loong, hệ Sấm) =====================
+   Rồng phương Đông thân dài uốn lượn, cưỡi mây giông (khác Rồng Lửa kiểu phương Tây: cánh dơi, đứng bốn chân).
+   Dạng 1  rồng con cuộn tròn thành vòng như rắn nhỏ, sừng nhú, ôm viên ngọc điện trong lòng
+   Dạng 2  rồng non dựng thân chữ S, râu ngắn, gạc non, bốn chân nhỏ
+   Dạng 3  rồng trưởng thành lượn sóng trên đám mây giông, bờm điện, râu dài, vây lưng vàng
+   Dạng 4  Thanh Long thần: thân cuộn xoắn quanh khung, vây lưng tia sét vàng, vuốt nắm ngọc sấm, mây giông + sét xoáy
+   Tọa độ tuyệt đối trong khung 200×200 (tâm x = 100, chân chạm y = 188); không dùng RIG, tham số g của draw bị bỏ qua.
+   Thân là một "ống" chạy theo xương sống mượt (Catmull-Rom, lấy mẫu cách đều 3 px): khối viền → dải bóng → bụng vàng
+   → vảy bụng → vảy lưng → vệt sáng, vây lưng vẽ trước để nằm sau thân.
+   Trả về { back, body, head, front, anc }; anc.halo = [x, y, rx] là vị trí đầu thật cho hiệu ứng hào quang (haloAt).
+   Cần gfx.js (pa, ci, ln, hl, bl, f1, cel, bolt, spark4, eyes2, OL) và PET_SPECS, PET_LITE của pets.js.
+   Mọi hàm phụ nằm trong khối này, tiền tố lng; không thêm tên toàn cục. */
+(() => {
+  const lngQ = (x, y) => Math.round(x) + ',' + Math.round(y);
+  const LNG_GOLD = '#ffd84a', LNG_CYAN = '#33e1ff', LNG_VIO = '#8a5cff';
+
+  /* ----- Xương sống ----- */
+  // Điểm điều khiển [x, y, nửa bề rộng] → mẫu cách đều ds px, mỗi mẫu {x, y, w, tx, ty, nx, ny}.
+  // Pháp tuyến n chỉ phía LƯNG (v = +1); k = -1 đảo phía lưng sang bên kia.
+  function lngFrame(cp, ds = 3, k = 1) {
+    const n = cp.length, at = i => cp[Math.max(0, Math.min(n - 1, i))], raw = [];
+    for (let i = 0; i < n - 1; i++) for (let j = 0; j < 10; j++) {
+      const t = j / 10, a = at(i - 1), b = at(i), c = at(i + 1), d = at(i + 2), t2 = t * t, t3 = t2 * t;
+      raw.push([0, 1, 2].map(m => .5 * (2 * b[m] + (c[m] - a[m]) * t + (2 * a[m] - 5 * b[m] + 4 * c[m] - d[m]) * t2 + (3 * b[m] - a[m] - 3 * c[m] + d[m]) * t3)));
+    }
+    raw.push(cp[n - 1]);
+    const out = [raw[0]];
+    let acc = 0, next = ds;
+    for (let i = 1; i < raw.length; i++) {
+      const p = raw[i - 1], q = raw[i], L = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      while (next <= acc + L) { const t = (next - acc) / L; out.push(p.map((v, m) => v + (q[m] - v) * t)); next += ds; }
+      acc += L;
+    }
+    if (acc - (next - ds) > ds * .4) out.push(raw[raw.length - 1]);
+    return out.map((p, i) => {
+      const a = out[Math.max(0, i - 1)], b = out[Math.min(out.length - 1, i + 1)], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1;
+      return { x: p[0], y: p[1], w: Math.max(p[2], .4), tx: tx / l, ty: ty / l, nx: -ty / l * k, ny: tx / l * k };
+    });
+  }
+  // Điểm lệch khỏi xương sống: v ∈ [-1 bụng, 1 lưng] theo bề rộng; ins: lùi vào trong (px)
+  const lngOff = (F, i, v, ins = 0) => { const p = F[i], d = Math.sign(v) * Math.max(0, Math.abs(v) * p.w - ins); return [p.x + p.nx * d, p.y + p.ny * d]; };
+  // Đường mượt qua dãy điểm (Q qua trung điểm), số nguyên cho gọn chuỗi
+  function lngPath(pts, cmd = 'M') {
+    const n = pts.length;
+    let d = cmd + lngQ(...pts[0]);
+    if (n < 3) return n === 2 ? d + 'L' + lngQ(...pts[1]) : d;
+    d += 'Q';
+    for (let i = 1; i < n - 1; i++) {
+      const a = pts[i], b = pts[i + 1], m = i < n - 2 ? [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] : b;
+      d += (i > 1 ? ' ' : '') + lngQ(...a) + ' ' + lngQ(...m);
+    }
+    return d;
+  }
+  const lngIdx = (a, b, k) => { const r = []; for (let i = a; i < b - k * .5; i += k) r.push(i); r.push(b); return r; };
+  const lngEdge = (F, I, v, ins = 0) => I.map(i => lngOff(F, i, v, ins));
+  const lngBand = (F, I, v0, v1, ins) => lngPath(lngEdge(F, I, v0, ins)) + lngPath(lngEdge(F, I, v1, ins).reverse(), 'L') + 'Z';
+
+  /* ----- Thân ----- */
+  // Lưỡi lửa / chùm lông: gốc (x, y), hướng ang (rad), dài L, nửa bề ngang gốc w, cong curl (tỉ lệ L)
+  function lngTongue(x, y, ang, L, w, curl = 0) {
+    const dx = Math.cos(ang), dy = Math.sin(ang), px = -dy, py = dx, tx = x + dx * L + px * curl * L, ty = y + dy * L + py * curl * L;
+    return `M${lngQ(x + px * w, y + py * w)}Q${lngQ(x + dx * L * .5 + px * w * 1.3, y + dy * L * .5 + py * w * 1.3)} ${lngQ(tx, ty)}Q${lngQ(x + dx * L * .55 - px * w * .3, y + dy * L * .55 - py * w * .3)} ${lngQ(x - px * w, y - py * w)}Z`;
+  }
+  // Khối lưỡi lửa gộp một viền (bờm, chùm đuôi, túm khuỷu)
+  const lngTuft = (ds, fill, sw = 3.5) => bl(ds.map(d => `<path d="${d}"/>`).join(''), fill, sw);
+  // Vây lưng dọc mép lưng: vây cong (mặc định) hoặc tia sét (o.bolt)
+  function lngFins(F, a, b, o) {
+    let d = '';
+    for (let i = a + o.off; i < b - 1; i += o.step) {
+      const p = F[i], h = o.h * Math.min(1, p.w / o.wr);
+      if (h < 3) continue;
+      const i0 = Math.max(0, i - o.half), i1 = Math.min(F.length - 1, i + o.half);
+      const B0 = lngOff(F, i0, .4), B1 = lngOff(F, i1, .4);
+      const at = (u, t) => lngQ(p.x + p.nx * (p.w + u * h) + p.tx * t * h, p.y + p.ny * (p.w + u * h) + p.ty * t * h);
+      if (o.bolt) d += `M${at(-.2, -.62)}L${at(1.1, .12)} ${at(.5, -.06)} ${at(.86, .56)} ${at(-.2, .62)}Z`;
+      else d += `M${lngQ(...B0)}Q${at(.7, -.2)} ${at(1, .5)}Q${at(.35, .55)} ${lngQ(...B1)}Z`;
+    }
+    return d ? pa(d, o.col, o.sw || 3.2) : '';
+  }
+  // Thân [a, b] vẽ trọn lớp: vây → khối viền → dải bóng → bụng → vảy bụng → vảy lưng → vệt sáng.
+  // Các dải trong lùi 2,4 px khỏi mép để không đè nét viền. o.fin: vây; o.sc2: thêm hàng vảy; o.k: bước mẫu của đường mép
+  function lngSeg(F, a, b, c, o = {}) {
+    const K = o.k || 4, ins = 2.4, I = lngIdx(a, b, K);
+    let s = o.fin ? lngFins(F, a, b, o.fin) : '';
+    s += pa(lngBand(F, I, 1, -1, 0), c.b, 5);
+    s += pa(lngBand(F, I, -.02, -1, ins), c.s, 0) + pa(lngBand(F, I, -.44, -1, ins), c.bl, 0);
+    let pl = '', sc = '';
+    const stepOf = i => Math.max(2, Math.round(F[i].w * .24));
+    for (let i = a + 1; i < b - 1; i += stepOf(i)) {
+      const p = F[i];
+      if (p.w < 3.4) break;
+      const A = lngOff(F, i, -.44), B = lngOff(F, i, -1, 2.2);
+      pl += `M${lngQ(...A)}Q${lngQ((A[0] + B[0]) / 2 - p.tx * p.w * .22, (A[1] + B[1]) / 2 - p.ty * p.w * .22)} ${lngQ(...B)}`;
+    }
+    const row = (v0, v1, sh) => {
+      for (let i = a + 2 + sh; i < b - 1; i += stepOf(i) + 1) {
+        const p = F[i];
+        if (p.w < 4.5) break;
+        const A = lngOff(F, i, v0), B = lngOff(F, i, v1, 2.2);
+        sc += `M${lngQ(...A)}Q${lngQ((A[0] + B[0]) / 2 + p.tx * p.w * .42, (A[1] + B[1]) / 2 + p.ty * p.w * .42)} ${lngQ(...B)}`;
+      }
+    };
+    row(.04, .6, 0);
+    if (o.sc2) row(.46, 1, 2);
+    if (pl) s += ln(pl, c.bls, 1.8);
+    if (sc) s += ln(sc, c.sc, 2, 'opacity=".75"');
+    const H = lngIdx(Math.min(b, a + 2), Math.max(a, b - 3), K).filter(i => F[i].w > 5);
+    if (H.length > 2) s += ln(lngPath(lngEdge(F, H, .5)), '#fff', Math.max(1.6, F[H[0]].w * .13), 'opacity=".5"');
+    return s;
+  }
+  // Chùm lông đuôi: quạt n lưỡi lửa theo hướng đuôi
+  function lngTail(F, n, L, fill, spread = 70) {
+    const p = F[F.length - 1], a = Math.atan2(p.ty, p.tx), ds = [];
+    for (let i = 0; i < n; i++) { const t = n > 1 ? i / (n - 1) - .5 : 0; ds.push(lngTongue(p.x - p.tx * 2, p.y - p.ty * 2, a + t * spread * Math.PI / 180, L * (1 - Math.abs(t) * .5), L * .2, -t * .3)); }
+    return lngTuft(ds, fill);
+  }
+  // Khối con nhộng giữa hai điểm, tọa độ số nguyên
+  function lngCap(x1, y1, x2, y2, r1, r2) {
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L, R = Math.round;
+    return `M${lngQ(x1 + nx * r1, y1 + ny * r1)}L${lngQ(x2 + nx * r2, y2 + ny * r2)}A${R(r2)},${R(r2)} 0 0 0 ${lngQ(x2 - nx * r2, y2 - ny * r2)}L${lngQ(x1 - nx * r1, y1 - ny * r1)}A${R(r1)},${R(r1)} 0 0 0 ${lngQ(x1 + nx * r1, y1 + ny * r1)}Z`;
+  }
+  // Ba vuốt ngà quặp quanh bàn (x, y) bán kính r, hướng a (rad); hook: độ quặp
+  function lngClaws(x, y, r, a, col, hook = 1) {
+    let d = '';
+    for (const k of [-1, 0, 1]) {
+      const b = a + k * .62, L = r * (k ? 1.7 : 2), cs = Math.cos(b), sn = Math.sin(b), bx = x + cs * r * .8, by = y + sn * r * .8, hw = r * .42, hk = hook * r * .55;
+      d += `M${lngQ(bx - sn * hw, by + cs * hw)}Q${lngQ(bx + cs * L * .75 - sn * hk, by + sn * L * .75 + cs * hk)} ${lngQ(bx + cs * L + sn * hk * .8, by + sn * L - cs * hk * .8)}Q${lngQ(bx + cs * L * .45 + sn * hw * .5, by + sn * L * .45 - cs * hw * .5)} ${lngQ(bx + sn * hw, by - cs * hw)}Z`;
+    }
+    return pa(d, col, 2.2);
+  }
+  // Chân rồng: [vai, khuỷu, bàn], bề dày r; vuốt theo hướng a (độ); o.tuft: góc túm lông khuỷu (độ)
+  function lngLeg(pts, r, c, o = {}) {
+    const [[x0, y0], [x1, y1], [x2, y2]] = pts, a = (o.a ?? Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI) * Math.PI / 180;
+    let s = '';
+    if (o.tuft !== undefined) { const t = o.tuft * Math.PI / 180, bx = x1 + Math.cos(t) * r * .6, by = y1 + Math.sin(t) * r * .6; s += lngTuft([-.5, 0, .5].map(k => lngTongue(bx, by, t + k, r * (k ? 2.2 : 2.9), r * .5, k * .25)), cel(c.m, c.ms), 3); }
+    s += lngClaws(x2, y2, r, a, o.claw || c.claw, o.hook);
+    s += bl(`<path d="${lngCap(x0, y0, x1, y1, r * 1.12, r * .92)}"/><path d="${lngCap(x1, y1, x2, y2, r * .92, r * .8)}"/><circle cx="${Math.round(x2)}" cy="${Math.round(y2)}" r="${f1(r * 1.05)}"/>`, o.fill || cel(c.b, c.s), 3.8);
+    // vảy cẳng: vạch ngang giữa cẳng
+    const ux = x2 - x1, uy = y2 - y1, ul = Math.hypot(ux, uy) || 1, nx = -uy / ul * r * .7, ny = ux / ul * r * .7, mx = x1 + ux * .4, my = y1 + uy * .4;
+    return s + ln(`M${lngQ(mx - nx, my - ny)}Q${lngQ(mx + ux / ul * 2.4, my + uy / ul * 2.4)} ${lngQ(mx + nx, my + ny)}`, o.line || c.sc, 1.8, 'opacity=".7"');
+  }
+  // Bàn tay rời: bàn tròn + 3 vuốt theo hướng a (độ); cute: bàn tròn 3 ngón, không vuốt (rồng con)
+  const lngPaw = (x, y, r, a, c, cute) => {
+    const t = a * Math.PI / 180;
+    if (!cute) return lngClaws(x, y, r, t, c.claw) + ci(x, y, r * 1.05, cel(c.b, c.s), 3.8);
+    return bl([-.7, 0, .7].map(k => `<circle cx="${f1(x + Math.cos(t + k) * r * .95)}" cy="${f1(y + Math.sin(t + k) * r * .95)}" r="${f1(r * .55)}"/>`).join('') + `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}"/>`, cel(c.b, c.s), 3.4) +
+      ln([-.35, .35].map(k => `M${lngQ(x + Math.cos(t + k) * r * .55, y + Math.sin(t + k) * r * .55)}l${f1(Math.cos(t + k) * r * .6)},${f1(Math.sin(t + k) * r * .6)}`).join(''), OL, 1.6);
+  };
+
+  /* ----- Đầu ----- */
+  // Bờm hai bên má: lưỡi lửa vuốt ngược lên, gộp một viền; râu cằm nhọn (dạng 2+); tia điện trắng (dạng 3+)
+  function lngMane(x, y, r, ry, f, c) {
+    const n = [0, 3, 3, 4, 4][f], L = r * [0, .7, .8, 1, 1.2][f], W = r * [0, .2, .2, .2, .19][f], ds = [];
+    for (const sd of [-1, 1]) for (let i = 0; i < n; i++) {
+      const t = n > 1 ? i / (n - 1) : .5, th = (-14 + 86 * t) * Math.PI / 180, bx = x + sd * Math.cos(th) * r * .9, by = y + r * .08 + Math.sin(th) * ry * .9;
+      const ang = sd > 0 ? th - .3 : Math.PI - th + .3;
+      ds.push(lngTongue(bx, by, ang, L * (1 - t * .35), W, -sd * .2));
+    }
+    if (f >= 2) for (const k of [-1, 0, 1]) ds.push(lngTongue(x + k * r * .24, y + ry * .86, Math.PI / 2 + k * .4, r * (.3 + f * .08) * (k ? .8 : 1), r * .13, -k * .2));
+    let s = lngTuft(ds, cel(c.m, c.ms), 3.6);
+    if (f >= 3) {
+      let d = '';
+      for (const sd of [-1, 1]) d += lngZig(x + sd * r * 1.04, y + ry * .02, x + sd * r * (1.5 + (f - 3) * .25), y + ry * .26, 3, 2.2);
+      s += ln(d, '#fff', 2, 'opacity=".9"');
+    }
+    return s;
+  }
+  // Gạc nai vàng kim: thân gạc + nhánh; dạng 1 chỉ là sừng nhú
+  function lngAntlers(x, y, r, ry, f, c) {
+    const W = [0, 6.5, 5, 5.4, 6][f];
+    let bm = '', tn = '', hi = '';
+    for (const sd of [-1, 1]) {
+      const X = v => x + sd * v * r, Y = v => y - v * ry;
+      if (f === 1) { hi += `M${lngQ(X(.12), Y(.9))}Q${lngQ(X(.18), Y(1.34))} ${lngQ(X(.5), Y(1.62))}Q${lngQ(X(.44), Y(1.24))} ${lngQ(X(.56), Y(.86))}Z`; continue; }
+      const L = [0, 0, .7, .98, 1.22][f], p0 = [X(.34), Y(.66)], cc = [X(.36), Y(.66 + L * .8)], p1 = [X(.34 + L * .62), Y(.66 + L * 1.05)];
+      const at = t => [0, 1].map(m => (1 - t) ** 2 * p0[m] + 2 * (1 - t) * t * cc[m] + t * t * p1[m]);
+      bm += `M${lngQ(...p0)}Q${lngQ(...cc)} ${lngQ(...p1)}`;
+      hi += `M${lngQ(...at(.25))}Q${lngQ(cc[0] - sd * 1.2, cc[1])} ${lngQ(...at(.7))}`;
+      const T = [[.5, -1, .32]];
+      if (f >= 3) T.push([.8, 1, .26]);
+      if (f >= 4) T.push([.3, 1, .22]);
+      T.forEach(([t, dir, l]) => { const q = at(t); tn += `M${lngQ(...q)}Q${lngQ(q[0] + sd * dir * l * r * .2, q[1] - l * ry * .7)} ${lngQ(q[0] + sd * dir * l * r * .62, q[1] - l * ry * 1.05)}`; });
+    }
+    if (f === 1) return pa(hi, 'url(#gGold)', 3.6);
+    return ln(bm, OL, W + 7) + (tn ? ln(tn, OL, W * .8 + 7) : '') + ln(bm, c.gold, W) + (tn ? ln(tn, c.gold, W * .8) : '') + ln(hi, '#fff8d0', W * .34);
+  }
+  // Râu rồng: sợi thon dần từ mép mõm bay ra ngoài, gợn sóng
+  function lngWhisker(pts, w0, c, col) {
+    const F = lngFrame(pts.map((p, i) => [p[0], p[1], w0 * (1 - i / (pts.length - 1) * .8)]), 3);
+    const I = lngIdx(0, F.length - 1, 3);
+    return pa(lngPath(lngEdge(F, I, 1)) + lngPath(lngEdge(F, I, -1).reverse(), 'L') + 'Z', col || c.wh, 2.5);
+  }
+  // Đầu rồng nhìn thẳng: bờm, gạc, tai vây, sọ + hai bầu mũi, mõm sáng, lỗ mũi xoắn, miệng nanh, gờ mày, mắt, dấu trán, râu
+  function lngHead(x, y, r, f, c, o = {}) {
+    const ry = r * .86, X = v => x + v * r, Y = v => y + v * ry, Q = (a, b) => lngQ(X(a), Y(b));
+    let s = lngMane(x, y, r, ry, f, c) + lngAntlers(x, y, r, ry, f, c);
+    // tai vây ngang tầm mắt
+    const e = .42 + f * .04;
+    s += bl([-1, 1].map(sd => `<path d="M${Q(sd * .8, -.42)}Q${Q(sd * (.9 + e * .5), -.62)} ${Q(sd * (.84 + e), -.5)}Q${Q(sd * (.9 + e * .6), -.2)} ${Q(sd * .86, -.04)}Z"/>`).join(''), cel(c.b, c.s), 4) +
+      ln([-1, 1].map(sd => `M${Q(sd * .9, -.3)}Q${Q(sd * (.9 + e * .4), -.46)} ${Q(sd * (.8 + e), -.48)}`).join(''), c.l, 2.2);
+    // sọ + hai bầu mũi gộp một viền
+    s += bl(`<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(r)}" ry="${f1(ry)}"/><ellipse cx="${f1(x)}" cy="${f1(Y(.56))}" rx="${f1(r * .7)}" ry="${f1(ry * .44)}"/><circle cx="${f1(X(-.4))}" cy="${f1(Y(.42))}" r="${f1(r * .28)}"/><circle cx="${f1(X(.4))}" cy="${f1(Y(.42))}" r="${f1(r * .28)}"/>`, cel(c.b, c.s));
+    // mõm sáng + sống mũi + lỗ mũi
+    s += pa(`M${Q(-.64, .42)}Q${Q(-.68, .18)} ${Q(-.36, .19)}Q${Q(0, .3)} ${Q(.36, .19)}Q${Q(.68, .18)} ${Q(.64, .42)}Q${Q(.62, .98)} ${Q(0, .98)}Q${Q(-.62, .98)} ${Q(-.64, .42)}Z`, c.l, 0);
+    s += ln(`M${Q(-.58, .24)}Q${Q(-.3, .1)} ${Q(0, .26)}Q${Q(.3, .1)} ${Q(.58, .24)}`, c.s, 2.6);
+    s += pa([-1, 1].map(sd => `M${Q(sd * .13, .44)}Q${Q(sd * .18, .3)} ${Q(sd * .33, .36)}Q${Q(sd * .3, .52)} ${Q(sd * .13, .44)}Z`).join(''), OL, 0) + ln([-1, 1].map(sd => `M${Q(sd * .38, .28)}Q${Q(sd * .5, .32)} ${Q(sd * .44, .48)}`).join(''), c.s, 2.2);
+    // miệng
+    if (f === 1) s += ln(`M${Q(-.22, .7)}Q${Q(-.11, .84)} ${Q(0, .7)}Q${Q(.11, .84)} ${Q(.22, .7)}`, OL, 3);
+    else s += ln(`M${Q(-.5, .64)}Q${Q(-.25, .82)} ${Q(0, .76)}Q${Q(.25, .82)} ${Q(.5, .64)}`, OL, 3.2) + pa([-1, 1].map(sd => `M${Q(sd * .38, .73)}l${f1(-sd * 2.6)},${3 + f} ${f1(-sd * 2.6)},${-3 - f}Z`).join(''), '#fff', 2);
+    // gờ mày nhọn vuốt ra sau (dạng 2+)
+    if (f >= 2) s += pa([-1, 1].map(sd => `M${Q(sd * .2, -.36)}Q${Q(sd * .6, -.68)} ${Q(sd * (.86 + f * .06), -.62 - f * .05)}Q${Q(sd * .64, -.3)} ${Q(sd * .36, -.22)}Z`).join(''), cel(c.m, c.ms), 3);
+    // mắt
+    const er = r * [0, .25, .225, .215, .215][f];
+    s += eyes2(x, Y(-.06), r * .4, er, er * 1.1, { skin: c.b, iris: c.i, lid: [0, 0, .55, .85, 1][f], brow: f > 1, pr: er * (f === 1 ? .62 : .5), slit: f >= 3, bw: [0, 4.5, 5.5, 6, 6.5][f], white: f >= 4 ? '#fffbe0' : '#fff', glow: f >= 4 && !PET_LITE ? LNG_CYAN : '' });
+    // dấu trán: tia chớp (dạng 1) → kim cương vàng → ngọc xanh → mũ miện tia sét vàng
+    const jy = Y(-.62);
+    if (f === 1) s += bolt(x - r * .02, jy - r * .14, r * .3, LNG_CYAN, 2);
+    else {
+      const jw = r * (.1 + f * .025), jh = r * (.14 + f * .04), J = (a, b) => lngQ(x + a * jw, jy + b * jh);
+      if (f >= 4) s += pa(`M${J(0, -2)}L${J(.7, -.7)} ${J(2.4, -1.3)} ${J(1.4, .2)} ${J(0, 1.1)} ${J(-1.4, .2)} ${J(-2.4, -1.3)} ${J(-.7, -.7)}Z`, 'url(#gGold)', 2.6);
+      s += pa(`M${J(0, -1)}L${J(1, 0)} ${J(0, 1)} ${J(-1, 0)}Z`, f >= 3 ? LNG_CYAN : 'url(#gGold)', 2.4) + ci(x - jw * .25, jy - jh * .3, jw * .25, '#fff', 0);
+    }
+    s += hl(X(-.46), Y(-.5), r * .2, r * .12);
+    // râu
+    const wl = r * [0, .4, .75, 1.3, 1.8][f];
+    for (const sd of [-1, 1]) {
+      const x0 = X(sd * .58), y0 = Y(.5), W = o.wpts ? o.wpts(sd, x0, y0) : [[x0, y0], [x0 + sd * wl * .3, y0 - wl * .1], [x0 + sd * wl * .62, y0 + wl * .14], [x0 + sd * wl, y0 + wl * .02]];
+      s += lngWhisker(W, [0, 2.8, 3.2, 3.6, 4][f], c);
+    }
+    return s;
+  }
+
+  /* ----- Ngọc, mây, sét ----- */
+  const lngZig = (x1, y1, x2, y2, n, a) => {
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+    let d = `M${lngQ(x1, y1)}`;
+    for (let i = 1; i < n; i++) { const t = i / n, k = i % 2 ? a : -a; d += `L${lngQ(x1 + dx * t + nx * k, y1 + dy * t + ny * k)}`; }
+    return d + `L${lngQ(x2, y2)}`;
+  };
+  const lngArc = (d, col = LNG_CYAN, w = 2.4, dl = 0) => `<g class="flick" style="animation-delay:-${dl}s">${ln(d, OL, w + 3)}${ln(d, col, w)}</g>`;
+  // Sét xoáy: tia gấp khúc chạy theo cung tròn tâm (cx, cy), bán kính R, từ góc a0 → a1 (độ)
+  function lngSwirl(cx, cy, R, a0, a1, col, dl = 0) {
+    let d = '';
+    for (let i = 0; i <= 8; i++) { const a = (a0 + (a1 - a0) * i / 8) * Math.PI / 180, rr = R + (i % 2 ? 5 : -5) * (i > 0 && i < 8 ? 1 : 0); d += (i ? 'L' : 'M') + lngQ(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
+    return lngArc(d, col, 2.6, dl);
+  }
+  // Ngọc sấm: cầu ngọc + xoáy tím + tia chớp vàng; dạng 4 có vương lửa vàng quanh ngọc
+  function lngPearl(x, y, r, f) {
+    let s = PET_LITE ? '' : ci(x, y, r * 1.75, LNG_CYAN, 0, 'opacity=".2"') + ci(x, y, r * 1.32, '#c9fbff', 0, 'opacity=".32"');
+    if (f >= 4) s += lngTuft([-2, -1, 0, 1, 2].map(i => { const a = (-90 + i * 34) * Math.PI / 180; return lngTongue(x + Math.cos(a) * r * .7, y + Math.sin(a) * r * .7, a, r * (1.1 - Math.abs(i) * .14), r * .3, i * .12); }), 'url(#gFlame)', 2.6);
+    s += ci(x, y, r, cel('#f6ffff', '#62d8ff', .56), 3.5);
+    s += ln(`M${lngQ(x - r * .62, y + r * .1)}Q${lngQ(x - r * .3, y - r * .62)} ${lngQ(x + r * .25, y - r * .4)}Q${lngQ(x + r * .6, y + r * .05)} ${lngQ(x + r * .1, y + r * .45)}`, LNG_VIO, Math.max(1.6, r * .14), 'opacity=".55"');
+    s += bolt(x - r * .08, y - r * .62, r * 1.2, LNG_GOLD, 2) + hl(x - r * .42, y - r * .45, r * .3, r * .15, -30, .9);
+    if (!PET_LITE && f >= 2 && f < 4) s += [0, 1, 2].map(i => { const a = (i * 120 + 20) * Math.PI / 180, x0 = x + Math.cos(a) * r, y0 = y + Math.sin(a) * r; return lngArc(lngZig(x0, y0, x0 + Math.cos(a) * r * .75, y0 + Math.sin(a) * r * .75, 3, 2.2), i % 2 ? '#ffe14d' : LNG_CYAN, 1.8, i * .3); }).join('');
+    return s;
+  }
+  // Mây giông cuộn: bướu tròn + đáy bo + nét xoắn mây lành
+  function lngCloud(x, y, k, col = '#6f7fc0', cold = '#36407a', curl = '#c9d4ff', sw = 3.5) {
+    const B = [[0, 0, 14], [-17, 5, 10], [17, 4, 11], [-30, 10, 6.5], [30, 10, 6.5]];
+    let s = bl(B.map(([dx, dy, r]) => `<circle cx="${Math.round(x + dx * k)}" cy="${Math.round(y + dy * k)}" r="${f1(r * k)}"/>`).join('') + `<rect x="${Math.round(x - 34 * k)}" y="${Math.round(y + 6 * k)}" width="${Math.round(68 * k)}" height="${Math.round(10 * k)}" rx="${f1(5 * k)}"/>`, cel(col, cold), sw);
+    s += ln(`M${lngQ(x - 4 * k, y + 4 * k)}a${f1(5 * k)},${f1(5 * k)} 0 1 1 ${f1(7 * k)},-5a${f1(3 * k)},${f1(3 * k)} 0 1 1 -3,-4M${lngQ(x - 21 * k, y + 9 * k)}a${f1(4 * k)},${f1(4 * k)} 0 1 1 ${f1(6 * k)},-4M${lngQ(x + 13 * k, y + 8 * k)}a${f1(4 * k)},${f1(4 * k)} 0 1 1 ${f1(6 * k)},-4`, curl, 2, 'opacity=".9"');
+    return s;
+  }
+
+  /* ----- 4 dạng ----- */
+  // Dạng 1: rồng con cuộn tròn thành vòng, đầu tựa trên đỉnh vòng, ôm viên ngọc điện trong lòng; đuôi vẩy ra trái
+  function lngF1(c) {
+    let back = '', body = '', head = '', front = '';
+    const cp = [];
+    for (let a = -62; a <= 198; a += 26) { const t = (a + 62) / 260, rad = a * Math.PI / 180; cp.push([100 + 30 * Math.cos(rad), 144 + 30 * Math.sin(rad), 9.5 + 3 * Math.sin(t * Math.PI)]); }
+    cp.push([62, 124, 7.5], [50, 116, 5], [44, 104, 3], [48, 94, 1.2]);
+    const F = lngFrame(cp, 3, -1), N = F.length - 1;
+    body += lngTail(F, 3, 16, cel(c.m, c.ms), 80) + lngSeg(F, 0, N, c, { fin: { off: 4, step: 5, half: 2, h: 8, wr: 10, col: cel(c.m, c.ms), sw: 2.6 } });
+    // bàn chân sau tí hon thò dưới vòng
+    body += lngPaw(76, 180, 6, 115, c, 1) + lngPaw(124, 180, 6, 65, c, 1);
+    // ngọc điện ôm trong lòng vòng, hai bàn tay nhỏ đỡ hai bên (lớp thân để khăn, dây chuyền đeo đè lên)
+    body += lngPearl(100, 146, 13, 1) + lngPaw(86, 157, 4.8, -70, c, 1) + lngPaw(114, 157, 4.8, 250, c, 1);
+    head += lngHead(100, 104, 31, 1, c);
+    if (!PET_LITE) front += lngArc(lngZig(150, 116, 162, 104, 3, 3), LNG_CYAN, 2) + lngArc(lngZig(148, 160, 162, 162, 2, 3), '#ffe14d', 2, .5);
+    return { back, body, head, front, hx: 100, hy: 104, r: 31, neck: [100, 134, 44], bk: [100, 132, 62, 46], bd: [100, 152, 48, 34] };
+  }
+  // Dạng 2: rồng non dựng thân chữ S, đuôi cuộn trên đất, bốn chân nhỏ, gạc non
+  function lngF2(c) {
+    let back = '', body = '', head = '', front = '';
+    const F = lngFrame([[98, 82, 10], [114, 98, 11.5], [122, 116, 12.5], [112, 134, 13], [90, 146, 13], [76, 162, 12.5], [86, 178, 11.5], [110, 182, 10], [134, 180, 8], [152, 170, 5.5], [160, 154, 3.2], [154, 142, 1]], 3, -1), N = F.length - 1;
+    const dk = cel(c.s, '#0b5f7a');
+    back += lngLeg([[126, 112], [140, 120], [144, 132]], 4.8, c, { a: 80, fill: dk, line: '#0b4f6a' }) + lngLeg([[104, 180], [116, 184], [124, 188]], 4.8, c, { a: 20, fill: dk, line: '#0b4f6a' });
+    body += lngTail(F, 3, 18, cel(c.m, c.ms)) + lngSeg(F, 0, N, c, { fin: { off: 3, step: 5, half: 3, h: 10, wr: 12, col: cel(c.m, c.ms), sw: 2.8 } });
+    body += lngLeg([[108, 112], [94, 122], [82, 116]], 5.2, c, { a: -150, tuft: 100 });
+    body += lngLeg([[82, 170], [72, 180], [64, 186]], 5.6, c, { a: 160, tuft: -40 });
+    head += lngHead(98, 64, 30, 2, c);
+    if (!PET_LITE) front += lngArc(lngZig(146, 120, 160, 108, 3, 3), '#ffe14d', 2.2) + lngArc(lngZig(48, 140, 36, 130, 3, 3), LNG_CYAN, 2.2, .5);
+    return { back, body, head, front, hx: 98, hy: 64, r: 30, neck: [104, 92, 36], bk: [106, 96, 52, 56], bd: [112, 118, 34, 40] };
+  }
+  // Dạng 3: rồng trưởng thành lượn sóng trên đám mây giông, bờm điện, râu dài
+  function lngF3(c) {
+    let back = '', body = '', head = '', front = '';
+    const F = lngFrame([[70, 88, 11], [84, 110, 13], [106, 124, 14], [130, 116, 14], [146, 94, 13.5], [166, 80, 12.5], [184, 90, 11], [188, 112, 9], [180, 132, 7], [174, 150, 4.8], [180, 164, 2.8], [190, 164, 1]], 3, -1), N = F.length - 1;
+    const dk = cel(c.s, '#0b5f7a');
+    if (!PET_LITE) back += lngCloud(34, 150, 1.1, '#5a63a8', '#2f3470', '#9aa6ee') + lngArc(lngZig(28, 166, 20, 186, 3, 4), '#ffe14d', 2.4);
+    back += lngLeg([[96, 118], [104, 134], [100, 148]], 5.6, c, { a: 100, fill: dk, line: '#0b4f6a' }) + lngLeg([[182, 118], [194, 124], [196, 138]], 5.2, c, { a: 80, fill: dk, line: '#0b4f6a' });
+    body += lngCloud(110, 168, 1.55, '#7b86cc', '#3d4486', '#c9d0ff');
+    body += lngTail(F, 4, 22, cel(c.m, c.ms)) + lngSeg(F, 0, N, c, { fin: { off: 3, step: 5, half: 3, h: 12, wr: 13, col: 'url(#gGold)', sw: 2.8 }, sc2: true });
+    body += lngLeg([[86, 108], [70, 120], [56, 130]], 6, c, { a: 140, tuft: -60 });
+    body += lngLeg([[168, 128], [160, 144], [150, 150]], 6, c, { a: 130, tuft: -30 });
+    head += lngHead(62, 68, 30, 3, c);
+    if (!PET_LITE) front += lngCloud(172, 176, .9, '#7b86cc', '#3d4486', '#c9d0ff') + lngArc(lngZig(140, 186, 126, 196, 2, 3), LNG_CYAN, 2.4, .3) +
+      [[178, 44, 5.5], [22, 106, 4.5], [118, 58, 4]].map(([x, y, r], i) => spark4(x, y, r, i % 2 ? LNG_CYAN : '#fff6b0', 1.8, 'twinkle', i * .4)).join('');
+    return { back, body, head, front, hx: 62, hy: 68, r: 30, neck: [74, 96, 34], bk: [80, 96, 50, 52], bd: [92, 116, 36, 40] };
+  }
+  // Dạng 4: Thanh Long thần cuộn xoắn quanh khung, vây tia sét vàng, vuốt nắm ngọc sấm, mây giông và sét xoáy
+  function lngF4(c) {
+    let back = '', body = '', head = '', front = '';
+    const F = lngFrame([[100, 90, 12], [110, 110, 15], [118, 134, 16.5], [106, 158, 17], [80, 174, 17], [52, 170, 16.5], [32, 146, 16], [28, 114, 15.5], [38, 82, 15], [56, 54, 14], [80, 34, 13], [106, 24, 12], [134, 28, 11], [160, 44, 10], [176, 68, 9], [182, 96, 7.5], [178, 124, 5.5], [168, 146, 3.5], [156, 160, 1.2]], 3, -1), N = F.length - 1;
+    if (!PET_LITE) {
+      back += ci(100, 100, 98, LNG_CYAN, 0, 'opacity=".1"') + ci(100, 100, 70, '#5dffc0', 0, 'opacity=".08"');
+      back += `<g class="spin" style="transform-origin:100px 100px"><circle cx="100" cy="100" r="95" fill="none" stroke="${OL}" stroke-width="7" stroke-dasharray="10 14" opacity=".55"/><circle cx="100" cy="100" r="95" fill="none" stroke="${LNG_GOLD}" stroke-width="3.5" stroke-dasharray="10 14"/></g>`;
+      back += lngCloud(24, 24, 1.05, '#4f5a96', '#262c5e', '#8a96e0');
+      back += lngArc(lngZig(12, 46, 4, 86, 4, 5), '#ffe14d', 2.8) + lngArc(lngZig(182, 14, 196, 58, 4, 5), LNG_CYAN, 2.8, .5);
+      front += lngSwirl(100, 102, 99, 196, 250, LNG_CYAN, .2) + lngSwirl(100, 102, 99, 8, 62, '#ffe14d', .7);
+    }
+    // vuốt sau (xa) thò sau thân bên phải
+    back += lngLeg([[126, 120], [142, 128], [150, 142]], 6, c, { a: 80, fill: cel(c.s, '#073d66'), line: '#06304f' });
+    body += lngTail(F, 5, 28, 'url(#gGold)', 90) + lngSeg(F, 0, N, c, { fin: { off: 2, step: 6, half: 3, h: 16, wr: 15, col: 'url(#gGold)', bolt: true, sw: 2.8 }, sc2: true, k: 5 });
+    head += lngHead(100, 64, 34, 4, c, { wpts: (sd, x0, y0) => [[x0, y0], [x0 + sd * 20, y0 - 6], [x0 + sd * 40, y0 + 10], [x0 + sd * 54, y0 + 34], [x0 + sd * 50, y0 + 54]] });
+    // vuốt trước nắm ngọc sấm trong lòng vòng thân
+    front += lngPearl(62, 126, 14.5, 4);
+    front += lngLeg([[104, 122], [90, 136], [76, 130]], 6.6, c, { a: 200, tuft: 70, claw: LNG_GOLD });
+    if (!PET_LITE) {
+      front += lngCloud(38, 188, .95, '#9aa4e8', '#4d559c', '#e6eaff') + lngCloud(166, 190, .85, '#9aa4e8', '#4d559c', '#e6eaff');
+      front += [[20, 100, 6], [150, 104, 5], [96, 150, 4.5], [186, 172, 4]].map(([x, y, r], i) => spark4(x, y, r, i % 2 ? LNG_CYAN : '#fff6b0', 1.8, 'twinkle', i * .35)).join('');
+    }
+    return { back, body, head, front, hx: 100, hy: 64, r: 34, neck: [104, 96, 40], bk: [100, 92, 84, 66], bd: [112, 126, 34, 44] };
+  }
+
+  PET_SPECS.ep_loong = {
+    el: 'thunder', name: 'Thanh Long Sấm',
+    c: { b: '#2fd3c4', s: '#13879c', l: '#dcfff4', bl: '#ffe9a6', bls: '#d99a2b', sc: '#0f6f88', m: '#a6fbff', ms: '#36bde6', wh: '#fff3b8', i: '#ffd21f', gold: LNG_GOLD, claw: '#fffbe8' },
+    c4: { b: '#23c2c9', s: '#0b5f8c', l: '#e6fff8', sc: '#0a5478', m: '#c6fdff', ms: '#2aa6e2', bl: '#ffe58a', bls: '#c98a1a' },
+    draw(f, g, c) {
+      const o = [null, lngF1, lngF2, lngF3, lngF4][f](c), ry = o.r * .86;
+      const anc = {
+        head: [o.hx, f1(o.hy - ry * .92), f1(o.r * 1.5)],
+        eyes: [o.hx, f1(o.hy - ry * .06), f1(o.r * 1.34)],
+        neck: o.neck, back: o.bk, body: o.bd,
+        halo: [o.hx, f1(o.hy - ry - 10), f1(o.r * .7)]
+      };
+      return { back: o.back, body: o.body, head: o.head, front: o.front, anc };
+    }
+  };
+})();
+
+/* ===================== BẠCH TƯỢNG NGỌC (ep_elephant · hệ Đá · Sử thi) ===================== */
+// Voi trắng linh thiêng bằng ngọc và đá quý: da trắng ngà có vân ngọc, trang sức vàng kim, ngọc lục bảo.
+// 1 voi con ngồi, vòi cuộn ôm viên ngọc → 2 voi non bước đi, ngà nhỏ bọc vàng, khăn gấm trên lưng
+// → 3 voi trưởng thành giơ vòi chào, ngà ngọc dài, mão vàng, áo gấm, vòng chân → 4 Bạch Tượng thần sáu ngà
+// đứng trên đài sen, lưng mang bảo tháp ngọc, vân vàng trên da, hào quang mạn-đà-la, đá quý lơ lửng.
+// Nạp sau js/pets.js (cần gfx.js và PET_SPECS, PET_LITE, GROUND). Mọi hàm phụ nằm trong IIFE, tiền tố elp, không thêm tên toàn cục.
+(() => {
+  const G = 'url(#gGold)', RUBY = ['#ff9aae', '#d61f4a'];
+  /* ----- Hình học ----- */
+  const elpQ = (x, y) => Math.round(x) + ',' + Math.round(y); // tọa độ nguyên cho khối lớn (gọn chuỗi SVG)
+  // Catmull-Rom: chuỗi lệnh C đi qua các điểm (bắt đầu tại p[0])
+  const elpC = (p, closed) => {
+    const n = p.length, at = i => closed ? p[(i + n) % n] : p[Math.max(0, Math.min(n - 1, i))];
+    let d = '';
+    for (let i = 0; i < (closed ? n : n - 1); i++) {
+      const a = at(i - 1), b = at(i), c = at(i + 1), e = at(i + 2);
+      d += `C${elpQ(b[0] + (c[0] - a[0]) / 6, b[1] + (c[1] - a[1]) / 6)} ${elpQ(c[0] - (e[0] - b[0]) / 6, c[1] - (e[1] - b[1]) / 6)} ${elpQ(c[0], c[1])}`;
+    }
+    return d;
+  };
+  const elpSm = (p, closed = true) => `M${elpQ(p[0][0], p[0][1])}` + elpC(p, closed) + (closed ? 'Z' : '');
+  const elpShp = (p, fill, w = 5.5, ex = '') => pa(elpSm(p), fill, w, ex);
+  // Ống thuôn qua các điểm (vòi, ngà, đuôi): d = viền kín, L/R = hai mép; k > 1: giữ to lâu rồi mới nhọn
+  const elpTube = (p, w0, w1, k = 1) => {
+    const n = p.length, L = [], R = [];
+    p.forEach((q, i) => {
+      const a = p[Math.max(0, i - 1)], b = p[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy) || 1, w = (w0 + (w1 - w0) * Math.pow(i / (n - 1), k)) / 2;
+      L.push([q[0] - dy / m * w, q[1] + dx / m * w]); R.push([q[0] + dy / m * w, q[1] - dx / m * w]);
+    });
+    const rr = R.slice().reverse();
+    return { d: `M${elpQ(...L[0])}${elpC(L)}A${f1(w1 / 2)},${f1(w1 / 2)} 0 0 0 ${elpQ(...rr[0])}${elpC(rr)}Z`, L, R };
+  };
+
+  /* ----- Bộ phận voi ----- */
+  // Đầu nhìn thẳng, đỉnh hai u (đặc trưng voi châu Á)
+  const ELP_HEAD = [[0, .95], [.62, .84], [.96, .36], [1, -.16], [.88, -.62], [.58, -.92], [.27, -.95], [0, -.8], [-.27, -.95], [-.58, -.92], [-.88, -.62], [-1, -.16], [-.96, .36], [-.62, .84]];
+  const elpHead = (x, y, R, c) => elpShp(ELP_HEAD.map(([a, b]) => [x + a * R, y + b * R * .92]), cel(c.b, c.s)) + hl(x - R * .5, y - R * .6, R * .2, R * .09, -28, .55);
+  // Tai xòe hai bên (k: cỡ); trim: viền vàng
+  const ELP_EAR = [[.6, -.62], [1.08, -.94], [1.6, -.82], [1.92, -.32], [1.9, .3], [1.62, .78], [1.18, .92], [.8, .5]];
+  const elpEar = (x, y, R, sd, k, c, trim) => {
+    const m = (q, t = 1) => [x + sd * (.6 + (1.3 + (q[0] - 1.3) * t - .6) * k) * R, y + q[1] * t * k * R];
+    let s = elpShp(ELP_EAR.map(q => m(q)), cel(c.b, c.s), 5) + pa(elpSm(ELP_EAR.map(q => m([q[0] + .06, q[1] + .02], .7))), c.ear, 0, 'opacity=".9"');
+    if (trim) { const t = elpSm(ELP_EAR.slice(1, 7).map(q => m(q, .86)), false); s += ln(t, OL, 6) + ln(t, '#ffd21f', 3.2); }
+    return s;
+  };
+  // Vòi: tô kín, chỉ viền hai mép và chóp (gốc vòi liền mặt); nếp nhăn ngang; mút vòi hồng
+  const elpTrunk = (p, w0, w1, c, k = [.35, .5, .65]) => {
+    const T = elpTube(p, w0, w1), L = T.L.slice(1), rr = T.R.slice(1).reverse();
+    let s = `<path d="${T.d}" fill="${cel(c.b, c.s)}"/>` + ln(`M${elpQ(...L[0])}${elpC(L)}A${f1(w1 / 2)},${f1(w1 / 2)} 0 0 0 ${elpQ(...rr[0])}${elpC(rr)}`, OL, 4.5);
+    for (const j of k) { const i = Math.round((p.length - 1) * j), a = T.L[i], b = T.R[i]; s += ln(`M${P(a[0] + (b[0] - a[0]) * .22, a[1] + (b[1] - a[1]) * .22)} Q${P((a[0] + b[0]) / 2 + (b[1] - a[1]) * .12, (a[1] + b[1]) / 2 - (b[0] - a[0]) * .12)} ${P(a[0] + (b[0] - a[0]) * .78, a[1] + (b[1] - a[1]) * .78)}`, c.s, 2.2); }
+    const e = p[p.length - 1];
+    return s + ci(e[0], e[1], w1 * .24, c.ear, 0);
+  };
+  // Ngà thuôn nhọn qua các điểm
+  const elpTusk = (p, w, fill, sw = 4) => pa(elpTube(p, w, .6, 2.2).d, fill, sw);
+  // Ngà lưỡi liềm: gốc (x0, y0) dưới cằm, bên sd, tầm ngang sp, độ võng dr, mũi vút lên ri, nửa bề dày gốc th; có vệt sáng
+  const elpCres = (x0, y0, sd, sp, dr, ri, th, fill, sw = 3.8) => pa(`M${elpQ(x0 - sd * th, y0)}C${elpQ(x0 - sd * th * .9, y0 + dr)} ${elpQ(x0 + sd * sp * .88, y0 + dr * 1.04)} ${elpQ(x0 + sd * sp, y0 - ri)}C${elpQ(x0 + sd * sp * .77, y0 + dr * .58)} ${elpQ(x0 + sd * th * 1.7, y0 + dr * .58)} ${elpQ(x0 + sd * th, y0)}Z`, fill, sw) +
+    ln(`M${elpQ(x0 + sd * sp * .3, y0 + dr * .66)}Q${elpQ(x0 + sd * sp * .7, y0 + dr * .7)} ${elpQ(x0 + sd * sp * .9, y0 + dr * .2 - ri * .5)}`, '#fff', 2, 'opacity=".9"');
+  // Mắt: dạng 1 tròn to có lông mi; 2–4 hạnh nhân, mí hạ dần (hiền → uy nghi); dạng 4 phát sáng
+  const elpEye = (cx, cy, rx, ry, sd, f, c) => {
+    if (f === 1) {
+      const ix = cx - sd * .8;
+      return el(cx, cy, rx, ry, '#fff', 3.4) + ci(ix, cy + ry * .12, rx * .74, c.i, 0) + ci(ix, cy + ry * .16, rx * .42, OL, 0) +
+        ci(ix - rx * .3, cy - ry * .2, rx * .3, '#fff', 0) + ci(ix + rx * .28, cy + ry * .42, rx * .13, '#fff', 0) +
+        ln(`M${P(cx + sd * rx * .78, cy - ry * .55)} q${f1(sd * 3)},-1 ${f1(sd * 5.5)},-5 M${P(cx + sd * rx * .58, cy - ry * .78)} q${f1(sd * 2)},-2 ${f1(sd * 3)},-6`, OL, 2.2);
+    }
+    const sl = [0, 0, .12, .3, .4][f], ia = [cx - sd * rx, cy + ry * .15], oa = [cx + sd * rx, cy - ry * sl], ix = cx - sd * rx * .06, iy = cy + ry * .12;
+    const top = `M${P(...ia)} C${P(cx - sd * rx * .6, cy - ry * 1.15)} ${P(cx + sd * rx * .5, cy - ry * 1.2)} ${P(...oa)}`;
+    let s = `<path d="${top} C${P(cx + sd * rx * .7, cy + ry * .95)} ${P(cx - sd * rx * .5, cy + ry * 1.1)} ${P(...ia)}Z" fill="#fff" stroke="${OL}" stroke-width="2.4" stroke-linejoin="round"/>`;
+    s += ci(ix, iy, ry * .8, c.i, 0) + (f === 4 ? `<circle cx="${f1(ix)}" cy="${f1(iy)}" r="${f1(ry * .8)}" fill="none" stroke="#c8fff0" stroke-width="1.5"/>` : '') + ci(ix, iy, ry * .42, OL, 0) +
+      ci(ix - ry * .3, iy - ry * .32, ry * .26, '#fff', 0) + ci(ix + ry * .32, iy + ry * .32, ry * .12, '#fff', 0);
+    // mí trên cắt chéo vào trong (dạng 3–4), viền trên dày, lông mày
+    if (f >= 3) s += `<path d="${top} L${P(cx - sd * rx * .15, cy - ry * (f === 4 ? .42 : .55))} Z" fill="${c.b}"/>`;
+    s += ln(top + ` l${f1(sd * rx * .26)},${f1(-ry * .16)}`, OL, 3.4);
+    if (f >= 3) s += ln(`M${P(cx - sd * rx * 1.05, cy - ry * 1.25 + 1.5)} Q${P(cx - sd * rx * .1, cy - ry * 1.85)} ${P(cx + sd * rx * 1.1, cy - ry * 1.6)}`, OL, 3.2);
+    return s;
+  };
+  const elpEyes = (x, y, gap, rx, ry, f, c) => elpEye(x - gap, y, rx, ry, -1, f, c) + elpEye(x + gap, y, rx, ry, 1, f, c);
+  // Dấu ngọc trên trán (dấu hệ): giọt ngọc nạm vàng
+  const elpMark = (x, y, r, c) => pa(`M${P(x, y - r * 1.5)} Q${P(x + r * 1.15, y - r * .1)} ${P(x, y + r)} Q${P(x - r * 1.15, y - r * .1)} ${P(x, y - r * 1.5)}Z`, G, 2) +
+    pa(`M${P(x, y - r * .9)} Q${P(x + r * .65, y)} ${P(x, y + r * .5)} Q${P(x - r * .65, y)} ${P(x, y - r * .9)}Z`, cel(c.jl, c.em), 0) + ci(x - r * .2, y - r * .25, r * .16, '#fff', 0);
+  // Chân trụ: tâm trên xt (đỉnh yt), tâm bàn chân xf; móng chân; vòng chân vàng (band = y) có ngọc
+  const elpLeg = (xt, yt, xf, w, fill, c, o = {}) => {
+    const gy = o.gy ?? GROUND, fw = w * .56, my = (yt + gy) / 2, mx_ = (xt + xf) / 2;
+    let s = elpShp([[xt - w / 2, yt], [xt + w / 2, yt], [mx_ + w * .48, my], [xf + fw + 1, gy - 3], [xf, gy + 1.5], [xf - fw - 1, gy - 3], [mx_ - w * .48, my]], fill, 5);
+    s += [-.6, 0, .6].map(k => el(xf + fw * k, gy - 1.6, fw * .22, 2.8, o.nail || c.nail, 1.8)).join('');
+    if (o.band) { const by = o.band, bx = xt + (xf - xt) * (by - yt) / (gy - yt), hw = w * .53, d = `M${P(bx - hw, by)} Q${P(bx, by + 4)} ${P(bx + hw, by)}`; s += ln(d, OL, 9) + ln(d, '#ffd21f', 5.5) + (o.gem ? ci(bx, by + 2.4, 2.8, c.em, 1.6) : ''); }
+    return s;
+  };
+  // Vân ngọc trên da; gold: vân vàng khảm (dạng 4)
+  const elpVein = (d, c, gold) => gold ? ln(d, OL, 4.2) + ln(d, '#ffd21f', 2) : ln(d, c.jade, 2.4, 'opacity=".85"');
+  // Ngọc tròn có điểm sáng
+  const elpGem = (x, y, r, c1, c2, w = 2) => ci(x, y, r, cel(c1, c2), w) + ci(x - r * .32, y - r * .34, r * .3, '#fff', 0, 'opacity=".9"');
+  // Đá quý cắt mặt (lơ lửng)
+  const elpFacet = (x, y, r, c1, c2) => pa(`M${P(x, y - r * 1.3)} L${P(x + r, y - r * .2)} L${P(x, y + r * 1.1)} L${P(x - r, y - r * .2)}Z`, cel(c1, c2), 2.2) + ln(`M${P(x - r * .5, y - r * .45)} L${P(x, y - r * .95)}`, '#fff', 1.6);
+  // Tua vàng treo
+  const elpTassel = (x, y, h = 9) => pa(`M${elpQ(x - 2, y)}A2.6,2.6 0 1 1 ${elpQ(x + 2, y)}L${elpQ(x + 4, y + h)}Q${elpQ(x, y + h + 2)} ${elpQ(x - 4, y + h)}Z`, G, 1.8);
+  // Viên ngọc lục bảo phát sáng
+  const elpOrb = (x, y, r, c, glow = 1) => (PET_LITE || !glow ? '' : ci(x, y, r + 5, c.jl, 0, 'opacity=".4"')) + ci(x, y, r, cel(c.jl, c.em), 3.2) + hl(x - r * .38, y - r * .4, r * .3, r * .16, -35, .9) + ci(x + r * .4, y + r * .38, r * .1, '#fff', 0);
+  // Đuôi dây có chùm lông ngọc, vòng vàng
+  const elpTail = (d, tuft, c, ring) => `<g class="pt">` + tube(d, cel(c.b, c.s), 4.5, 3.5) + (ring ? ln(ring, '#ffd21f', 4) : '') + elpShp(tuft, cel(c.jade, c.jd), 3.5) + `</g>`;
+  // Mão vàng nhiều đỉnh: tâm đáy (x, y), nửa rộng w, cao h; đá giữa ngọc lục bảo, hai bên hồng ngọc
+  const elpCrown = (x, y, w, h, c, big) => {
+    const p = big ? [[-1, 0], [-1.2, -.6], [-.62, -.36], [-.36, -.78], [0, -1], [.36, -.78], [.62, -.36], [1.2, -.6], [1, 0]] : [[-1, 0], [-1.12, -.56], [-.55, -.34], [0, -1], [.55, -.34], [1.12, -.56], [1, 0]];
+    return pa(`M${p.map(([a, b]) => P(x + a * w, y + b * h)).join(' L')} Q${P(x, y - h * .2)} ${P(x - w, y)}Z`, G, 3.5) + ln(`M${P(x - w * .95, y - h * .1)} Q${P(x, y - h * .3)} ${P(x + w * .95, y - h * .1)}`, '#d99500', 2.4) +
+      elpGem(x, y - h * .42, w * .22, c.jl, c.em) + elpGem(x - w * .68, y - h * .2, w * .12, ...RUBY, 1.6) + elpGem(x + w * .68, y - h * .2, w * .12, ...RUBY, 1.6) + ci(x, y - h - 2, w * .12, '#fff6b0', 1.8);
+  };
+  // Lưới ngọc vàng rủ trên trán
+  const elpNet = (x, y, w) => { const d = `M${P(x - w, y - 12)} Q${P(x - w * .45, y - 2)} ${P(x, y)} Q${P(x + w * .45, y - 2)} ${P(x + w, y - 12)} M${P(x - w * .55, y - 5)} l0,5 M${P(x + w * .55, y - 5)} l0,5`; return ln(d, OL, 4.5) + ln(d, '#ffd21f', 2.4); };
+  // Neo trang phục + vị trí đầu cho hào quang (anc.halo = [x, y, rx])
+  const elpAnc = (hx, top, hw, ey, ew, nk, bk, bd, halo) => ({ head: [hx, top, hw], eyes: [hx, ey, ew], neck: nk, back: bk, body: bd, halo });
+
+  /* ----- 4 dạng ----- */
+  const ELP = [null,
+    // 1. Voi con trắng ngồi tròn, tai to, vòi cuộn ôm viên ngọc lục bảo
+    (c) => {
+      let body = '', head = '';
+      const hx = 100, hy = 116, R = 31;
+      body += elpShp([[100, 130], [124, 136], [135, 154], [131, 174], [114, 185], [86, 185], [69, 174], [65, 154], [76, 136]], cel(c.b, c.s));
+      body += elpVein('M71,160 q5,-4 9,1 t9,0 M124,146 q4,4 8,1', c);
+      for (const sd of [-1, 1]) body += el(100 + sd * 20, 182, 12.5, 8, cel(c.b, c.s), 4.5) + [-.5, 0, .5].map(k => el(100 + sd * 20 + k * 9, 186, 2.4, 2.2, c.nail, 1.6)).join('');
+      body += ln('M110,178 Q120,181 130,178', OL, 7) + ln('M110,178 Q120,181 130,178', '#ffd21f', 3.6);
+      head += elpEar(hx, hy, R, -1, 1.04, c) + elpEar(hx, hy, R, 1, 1.04, c);
+      head += elpHead(hx, hy, R, c) + elpVein('M78,104 q4,-4 9,-2', c);
+      head += elpMark(hx, hy - R * .62, 4, c);
+      head += elpEyes(hx, hy - 1, 13.5, 8.6, 9.6, 1, c);
+      head += el(hx - 23, hy + 11, 5, 3, '#ff9ab4', 0, 'opacity=".7"') + el(hx + 23, hy + 11, 5, 3, '#ff9ab4', 0, 'opacity=".7"');
+      head += elpTrunk([[100, 122], [100, 136], [98, 150], [101, 162], [110, 170], [122, 169], [130, 160], [131, 150]], 17, 9, c, [.22, .34]);
+      head += elpOrb(115, 153, 11, c);
+      return { back: '', body, head, front: '', anc: elpAnc(hx, hy - R * .86, R * 1.6, hy - 1, 13.5 * 3.15, [hx, hy + R * .78, R * 1.7], [100, 132, 66, 52], [100, 158, 56, 50], [hx, hy - R * .9 - 8, R * .72]) };
+    },
+    // 2. Voi non bước đi bốn chân, ngà nhỏ bọc vàng, khăn gấm đỏ viền vàng trên lưng
+    (c) => {
+      let back = '', body = '', head = '';
+      const hx = 64, hy = 100, R = 25;
+      back += elpTail('M167,112 Q178,120 177,136', [[177, 132], [182, 140], [180, 150], [176, 152], [172, 146], [173, 139]], c);
+      body += elpLeg(108, 128, 112, 18, cel(c.s, c.d), c) + elpLeg(156, 126, 152, 18, cel(c.s, c.d), c);
+      body += elpShp([[78, 98], [100, 86], [128, 82], [152, 88], [168, 104], [171, 124], [162, 142], [134, 148], [104, 148], [84, 142], [74, 122]], cel(c.b, c.s));
+      body += hl(102, 96, 10, 4, -15, .5);
+      body += elpVein('M86,128 q5,-4 10,0 t10,-1 M150,132 q4,-4 9,-1 M84,108 q3,-4 8,-3 M162,112 q3,4 6,8', c);
+      // khăn gấm
+      body += pa('M96,92 Q127,76 156,90 L160,122 Q128,132 94,122Z', cel(c.cl, c.cls), 4.5);
+      body += ln('M96,115 Q127,124 159,115', OL, 8.5) + ln('M96,115 Q127,124 159,115', '#ffd21f', 5) + ln('M99,94 Q127,81 154,92', '#ffd21f', 2.4, 'opacity=".85"');
+      body += [[110, 101], [144, 101]].map(([x, y]) => pa(`M${x},${y - 5} L${x + 4},${y} L${x},${y + 5} L${x - 4},${y}Z`, G, 1.8)).join('') + ci(127, 101, 6.5, G, 2.6) + elpGem(127, 101, 3.8, c.jl, c.em, 0);
+      body += elpTassel(95, 122) + elpTassel(160, 122);
+      body += elpLeg(92, 130, 86, 21, cel(c.b, c.s), c, { band: 172 }) + elpLeg(142, 130, 146, 21, cel(c.b, c.s), c, { band: 172 });
+      head += elpEar(hx, hy, R, -1, .92, c) + elpEar(hx, hy, R, 1, .92, c);
+      for (const sd of [-1, 1]) head += elpTusk([[hx + sd * 7, hy + 14], [hx + sd * 10, hy + 25], [hx + sd * 17, hy + 30]], 7, cel(c.tusk, c.tusks), 3.5) + ln(`M${P(hx + sd * 7, hy + 22)} l${sd * 6},-1`, '#ffd21f', 3.2);
+      head += elpHead(hx, hy, R, c);
+      head += elpMark(hx, hy - R * .64, 4.2, c);
+      head += elpEyes(hx, hy - 2, 10, 7.4, 7.6, 2, c);
+      head += elpTrunk([[hx, hy + 6], [hx, hy + 20], [hx - 3, hy + 32], [hx - 10, hy + 41], [hx - 20, hy + 43], [hx - 27, hy + 37], [hx - 26, hy + 30]], 16, 8.5, c);
+      return { back, body, head, front: '', anc: elpAnc(hx, hy - R * .86, R * 1.6, hy - 2, 31.5, [hx + 6, hy + R * .8, R * 1.6], [134, 90, 62, 56], [128, 118, 52, 50], [hx, hy - R * .9 - 8, R * .72]) };
+    },
+    // 3. Voi trưởng thành giơ vòi chào, sải bước; ngà ngọc dài, mão vàng, lưới ngọc trán, áo gấm tua vàng, vòng chân vàng
+    (c) => {
+      let back = '', body = '', head = '';
+      const hx = 60, hy = 84, R = 28;
+      back += elpTail('M177,96 Q190,104 189,124', [[189, 120], [195, 128], [193, 140], [188, 142], [183, 135], [184, 127]], c, 'M184,110 l7,-2');
+      body += elpLeg(110, 124, 112, 22, cel(c.s, c.d), c, { band: 172, nail: '#ffd21f' }) + elpLeg(166, 120, 162, 22, cel(c.s, c.d), c, { band: 172, nail: '#ffd21f' });
+      body += elpShp([[72, 80], [96, 64], [128, 60], [158, 68], [178, 88], [182, 112], [172, 134], [140, 142], [104, 142], [82, 134], [68, 110]], cel(c.b, c.s));
+      body += hl(100, 74, 12, 4.5, -18, .5);
+      body += elpVein('M88,124 q6,-5 12,0 t12,-1 M156,126 q5,-4 10,-1 M82,98 q4,-4 9,-3 M174,100 q3,5 4,10', c);
+      // áo gấm lớn: viền vàng, tua vàng, huy hiệu ngọc
+      body += pa('M98,70 Q132,52 166,70 L172,112 Q134,124 94,112Z', cel(c.cl, c.cls), 4.5);
+      body += ln('M95,104 Q134,116 171,104', OL, 10) + ln('M95,104 Q134,116 171,104', '#ffd21f', 6.5) + ln('M100,75 Q132,59 164,75', '#ffd21f', 2.6, 'opacity=".9"');
+      body += [[112, 86], [154, 86], [116, 98], [150, 98]].map(([x, y]) => pa(`M${x},${y - 4} L${x + 3.5},${y} L${x},${y + 4} L${x - 3.5},${y}Z`, G, 1.6)).join('');
+      body += ci(133, 89, 10, G, 3) + elpGem(133, 89, 6, c.jl, c.em);
+      body += [100, 114, 128, 142, 156, 168].map((x, i) => elpTassel(x, 108 + Math.sin(i / 5 * Math.PI) * 6, 7)).join('');
+      body += elpLeg(92, 124, 82, 24, cel(c.b, c.s), c, { band: 168, nail: '#ffd21f', gem: 1 }) + elpLeg(150, 124, 154, 24, cel(c.b, c.s), c, { band: 168, nail: '#ffd21f', gem: 1 });
+      // đầu
+      head += elpEar(hx, hy, R, -1, .8, c, 1) + elpEar(hx, hy, R, 1, .8, c, 1);
+      head += ci(hx + R * 1.38, hy + R * .78, 3.4, G, 2) + pa(`M${P(hx + R * 1.38, hy + R * .78 + 3)} q4.5,5 0,11 q-4.5,-6 0,-11Z`, cel(c.jl, c.em), 2);
+      for (const sd of [-1, 1]) head += elpCres(hx + sd * 8, hy + 17, sd, 46, 38, 10, 5.5, cel(c.tusk, c.jade), 4) + ln(`M${P(hx + sd * 5, hy + 29)} l${sd * 10},1`, OL, 7.5) + ln(`M${P(hx + sd * 5.5, hy + 29)} l${sd * 9},1`, '#ffd21f', 4);
+      head += elpHead(hx, hy, R, c);
+      head += elpCrown(hx, hy - 23, 21, 30, c);
+      head += elpNet(hx, hy - 9, 18) + elpMark(hx, hy - 5, 3.4, c);
+      head += elpEyes(hx, hy + 2, 10.5, 7.2, 7, 3, c);
+      head += elpTrunk([[hx, hy + 10], [hx - 4, hy + 24], [hx - 16, hy + 30], [hx - 29, hy + 22], [hx - 35, hy + 6], [hx - 36, hy - 12], [hx - 40, hy - 28], [hx - 48, hy - 36]], 18, 9.5, c, [.22, .35, .48, .62, .76]);
+      // hiệu ứng: quầng ngọc mờ sau lưng, lấp lánh quanh vòi và mão, hai viên đá quý lơ lửng
+      let front = '';
+      if (!PET_LITE) {
+        back = `<circle cx="118" cy="104" r="76" fill="#8affd8" opacity=".12"/>` + back;
+        front += [[18, 30, 5], [96, 26, 4], [192, 70, 4.5], [8, 116, 3.8]].map(([x, y, r], i) => spark4(x, y, r, i % 2 ? '#fff6b0' : '#ffffff', 1.6, 'twinkle', i * .45)).join('') +
+          [[186, 150, 4.2, c.jl, c.em], [30, 150, 3.8, ...RUBY]].map(([x, y, r, a, b], i) => `<g class="float" style="animation-delay:-${i * .8}s">${elpFacet(x, y, r, a, b)}</g>`).join('');
+      }
+      return { back, body, head, front, anc: elpAnc(hx, hy - R * .9, R * 1.6, hy + 2, 33, [hx + 8, hy + R * .82, R * 1.7], [140, 70, 70, 66], [134, 102, 58, 56], [hx, hy - 60, R * .72]) };
+    },
+    // 4. Bạch Tượng thần sáu ngà: đứng trên đài sen, lưng mang bảo tháp ngọc, vân vàng khảm trên da, hào quang mạn-đà-la, đá quý lơ lửng
+    (c) => {
+      let back = '', body = '', head = '', front = '';
+      const hx = 58, hy = 80, R = 29, gy = 174;
+      if (!PET_LITE) {
+        // hào quang: đĩa sáng ngọc + vòng cánh sen vàng xoay chậm + vòng chấm
+        const ring = (r, col, w, ex = '') => `<circle cx="112" cy="96" r="${r}" fill="none" stroke="${col}" stroke-width="${w}" ${ex}/>`, dots = 'stroke-dasharray="0 18.4" stroke-linecap="round"';
+        back += `<circle cx="112" cy="96" r="86" fill="#c8fff0" opacity=".14"/><circle cx="112" cy="96" r="64" fill="#fff6c4" opacity=".12"/>` + ring(80, OL, 7) + ring(80, '#ffd21f', 3.4) +
+          `<g class="spin" style="transform-origin:112px 96px">${ring(88, OL, 10, dots)}${ring(88, '#ffe680', 6, dots)}</g>` + ring(68, '#c8fff0', 2.4, 'stroke-dasharray="2 8" stroke-linecap="round" opacity=".8"');
+      }
+      back += elpTail('M180,96 Q192,104 191,124', [[191, 120], [197, 128], [195, 140], [190, 142], [185, 135], [186, 127]], c, 'M186,110 l7,-2');
+      // đài sen: lớp cánh sau (hướng lên, xòe)
+      const pet = (x, y, len, ang, w, f, hi) => {
+        const a = ang * Math.PI / 180, ux = Math.cos(a), uy = Math.sin(a), q = (l, n) => elpQ(x + ux * len * l - uy * w * n, y + uy * len * l + ux * w * n);
+        return pa(`M${q(0, 0)}C${q(.1, -.62)} ${q(.72, -.66)} ${q(1, 0)}C${q(.72, .66)} ${q(.1, .62)} ${q(0, 0)}Z`, f, 3.5) + (hi ? ln(`M${q(.3, -.28)}Q${q(.55, -.34)} ${q(.82, -.08)}`, '#fff', 2.2, 'opacity=".85"') : '');
+      };
+      const pk = lin('#ff6aa8', '#ffd0e4', '#ffffff');
+      back += [[-162, 38, 56], [-142, 44, 72], [-120, 46, 92], [-98, 46, 112], [-76, 46, 132], [-56, 44, 152], [-34, 40, 170]].map(([a, l, x]) => pet(x, 182, l, a, 22, pk)).join('');
+      body += elpLeg(106, 118, 108, 22, cel(c.s, c.d), c, { gy, band: 158, nail: '#ffd21f' }) + elpLeg(166, 116, 164, 22, cel(c.s, c.d), c, { gy, band: 158, nail: '#ffd21f' });
+      body += elpShp([[72, 80], [96, 66], [128, 62], [158, 68], [178, 86], [182, 108], [172, 130], [142, 138], [106, 138], [84, 130], [68, 108]], cel(c.b, c.s));
+      body += elpVein('M86,118 q6,-6 12,-1 t12,-2 t11,2 M152,122 q5,-5 11,-2 M82,96 q4,-5 10,-3 M172,96 q4,6 4,12', c, 1);
+      // áo gấm dưới bảo tháp
+      body += pa('M100,72 Q132,54 164,70 L170,100 Q132,114 96,100Z', cel(c.cl, c.cls), 4.5);
+      body += ln('M97,94 Q132,106 169,94', OL, 10) + ln('M97,94 Q132,106 169,94', '#ffd21f', 6.5);
+      body += [102, 116, 130, 144, 158, 170].map((x, i) => elpTassel(x, 98 + Math.sin(i / 5 * Math.PI) * 6, 7)).join('');
+      // bảo tháp ngọc: bệ sen vàng → vòm ngọc → đài vuông → chóp vòng vàng → ngọc đỉnh phát sáng
+      const sx = 132;
+      body += el(sx, 66, 28, 8, G, 3.5) + [-21, -10.5, 0, 10.5, 21].map(dx => pa(`M${sx + dx - 6},64Q${sx + dx},51 ${sx + dx + 6},64Z`, G, 2.6)).join('');
+      body += pa(`M${sx - 20},62Q${sx - 21},34 ${sx},30Q${sx + 21},34 ${sx + 20},62Q${sx},67 ${sx - 20},62Z`, cel(c.jl, c.jade), 4);
+      body += ln(`M${sx - 17},51Q${sx},57 ${sx + 17},51`, '#ffd21f', 3.2) + ln(`M${sx - 12},40Q${sx - 8},35 ${sx - 2},34`, '#fff', 2.6, 'opacity=".8"') + elpGem(sx, 44, 4.2, ...RUBY, 1.8);
+      body += pa(`M${sx - 7},31 L${sx + 7},31 L${sx + 6},24 L${sx - 6},24Z`, G, 3) + [[23, 9], [18, 7.4], [13.5, 5.8], [9.5, 4.4]].map(([y, w]) => el(sx, y, w, 2.8, G, 2.4)).join('');
+      body += elpOrb(sx, 1, 6, c, 0) + (PET_LITE ? '' : spark4(sx + 8, -6, 3.6, '#ffffff', 1.4, 'twinkle'));
+      body += elpLeg(92, 120, 90, 25, cel(c.b, c.s), c, { gy, band: 156, nail: '#ffd21f', gem: 1 }) + elpLeg(150, 120, 152, 25, cel(c.b, c.s), c, { gy, band: 156, nail: '#ffd21f', gem: 1 });
+      // đài sen: lớp cánh trước che bàn chân, viền vàng đáy
+      front += ln('M58,182 Q118,196 178,182', OL, 9) + ln('M58,182 Q118,196 178,182', '#ffd21f', 5);
+      front += [[-150, 32, 68], [-126, 34, 88], [-102, 36, 108], [-80, 36, 128], [-58, 34, 148], [-34, 32, 168]].map(([a, l, x]) => pet(x, 189 - Math.abs(x - 118) * .1, l, a, 21, pk, 1)).join('');
+      // đầu
+      head += elpEar(hx, hy, R, -1, .8, c, 1) + elpEar(hx, hy, R, 1, .8, c, 1);
+      const tf = cel('#ffffff', '#9fead0');
+      for (const sd of [-1, 1]) {
+        // ba ngà lưỡi liềm lồng nhau mỗi bên: gốc dưới cằm, cong xuống rồi vút lên
+        for (const [dx, dy, sp, dr, ri, th] of [[8, 16, 54, 40, 14, 5], [7, 19, 42, 34, 2, 4.4], [6, 22, 30, 27, -8, 3.8]]) head += elpCres(hx + sd * dx, hy + dy, sd, sp, dr, ri, th, tf);
+        if (!PET_LITE) head += spark4(hx + sd * 62, hy + 2, 3.6, '#ffffff', 1.4, 'twinkle', sd > 0 ? .5 : 0);
+      }
+      head += elpHead(hx, hy, R, c) + elpVein(`M${hx - 24},${hy - 2} q4,-6 10,-4 M${hx + 14},${hy - 16} q6,-2 9,3`, c, 1);
+      head += elpCrown(hx, hy - 23, 23, 40, c, 1);
+      head += elpNet(hx, hy - 9, 19) + elpMark(hx, hy - 5, 3.6, c);
+      head += elpEyes(hx, hy + 3, 10.5, 7.2, 6.8, 4, c);
+      head += elpTrunk([[hx, hy + 10], [hx, hy + 28], [hx - 1, hy + 42], [hx + 2, hy + 52], [hx + 9, hy + 57], [hx + 16, hy + 54], [hx + 17, hy + 47]], 18, 9.5, c, [.3, .45, .6]);
+      // đá quý lơ lửng + lấp lánh
+      if (!PET_LITE) front += [[14, 34, 5, c.jl, c.em], [190, 40, 4.5, ...RUBY], [194, 158, 5, '#9fd8ff', '#2f6fd1'], [10, 150, 4.5, '#ffe680', '#d99500'], [174, 12, 4, c.jl, c.em]].map(([x, y, r, a, b], i) => `<g class="float" style="animation-delay:-${f1(i * .5)}s">${elpFacet(x, y, r, a, b)}</g>`).join('') +
+        [[40, 10, 4.5], [198, 98, 4], [4, 96, 4]].map(([x, y, r], i) => spark4(x, y, r, i % 2 ? '#fff6b0' : '#ffffff', 1.6, 'twinkle', i * .4)).join('');
+      return { back, body, head, front, anc: elpAnc(hx, hy - R * .9, R * 1.6, hy + 3, 33, [hx + 8, hy + R * .82, R * 1.7], [146, 70, 70, 64], [134, 104, 58, 50], [hx, hy - 70, R * .72]) };
+    }
+  ];
+
+  PET_SPECS.ep_elephant = {
+    el: 'stone',
+    // b da trắng ngà, s bóng tím ngà, d bóng chân xa; jade/jd/jl ngọc bích; em ngọc lục bảo; cl/cls gấm đỏ; i mống mắt
+    c: { b: '#fffaf0', s: '#d9cde4', d: '#a99cc4', l: '#ffffff', ear: '#ffc4d4', nail: '#f3e7d2', jade: '#3fd6a0', jd: '#13916c', jl: '#9dffd9', em: '#16b97c', cl: '#e8335a', cls: '#9e1640', i: '#17b87e', tusk: '#fffdf4', tusks: '#e2d3b0' },
+    c4: { s: '#d2c4ea', d: '#9a8cc0', i: '#1fe0a0', cl: '#e02a5c', cls: '#8a1240' },
+    draw(f, g, c) { return ELP[f](c, g); }
+  };
+})();
+
+/* ===================== SỬ THI · BƯỚM THẦN RỪNG (ep_butterfly, hệ Rừng) =====================
+   Sâu non xanh ngọc đội lá → kén vàng kim treo cành, nứt sáng, đôi mắt nhìn ra → bướm vừa nở, cánh lá rừng dựng chữ V,
+   râu xoắn → Bướm Thần: bốn cánh kính màu ngọc–vàng, vương miện hoa, đuôi cánh dải lụa, phấn sáng, đom đóm, cánh hoa xoáy.
+   Tọa độ tuyệt đối trong khung 200×200 (chân chạm y = 188). draw(f, g, c) giữ chữ ký chung; g, c bỏ qua.
+   Cần: gfx.js (pa el ci ln hl bl P f1 cel lin leaf eye spark4 OL), pets.js (PET_SPECS, PET_LITE).
+   Mọi hàm phụ nằm trong IIFE, tiền tố bfy; không thêm tên toàn cục nào ngoài PET_SPECS.ep_butterfly. */
+(() => {
+  const R2 = Math.PI / 180;
+  const GOLD = '#ffd21f', GOLDS = '#d99500', PINK = '#ff5fa2', PINKL = '#ffb3d6', JADE = '#5dffc0', EM = '#16c08a', EMS = '#0a6e52', CREAM = '#fff3c8';
+  const Q0 = (x, y) => `${Math.round(x)},${Math.round(y)}`;
+
+  /* ----- Đường cong ----- */
+  // Catmull-Rom → các đoạn Bézier 'C…' nối điểm i → i+1
+  function bfySegs(a, closed) {
+    const n = a.length, g = i => closed ? a[(i + n) % n] : a[Math.max(0, Math.min(n - 1, i))], out = [];
+    for (let i = 0; i < (closed ? n : n - 1); i++) {
+      const p0 = g(i - 1), p1 = g(i), p2 = g(i + 1), p3 = g(i + 2);
+      out.push(`C${P(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)} ${P(p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)} ${P(p2[0], p2[1])}`);
+    }
+    return out;
+  }
+  const bfySm = (a, closed = false) => `M${P(a[0][0], a[0][1])}` + bfySegs(a, closed).join('') + (closed ? 'Z' : '');
+  // Lấy mẫu dày đúng đường Catmull-Rom ở trên
+  function bfySample(a, closed, per = 4) {
+    const n = a.length, g = i => closed ? a[(i + n) % n] : a[Math.max(0, Math.min(n - 1, i))], out = [];
+    for (let i = 0; i < (closed ? n : n - 1); i++) {
+      const p0 = g(i - 1), p1 = g(i), p2 = g(i + 1), p3 = g(i + 2);
+      for (let k = 0; k < per; k++) {
+        const t = k / per, t2 = t * t, t3 = t2 * t;
+        out.push([0, 1].map(j => .5 * (2 * p1[j] + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3)));
+      }
+    }
+    if (!closed) out.push(a[n - 1]);
+    return out;
+  }
+  // Dải thuôn theo đường tâm (đuôi lụa, sừng đuôi, cành)
+  function bfyTaper(c, w0, w1) {
+    const L = [], R = [], n = c.length;
+    for (let i = 0; i < n; i++) {
+      const a = c[Math.max(0, i - 1)], b = c[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy) || 1, w = (w0 + (w1 - w0) * i / (n - 1)) / 2;
+      L.push([c[i][0] - dy / m * w, c[i][1] + dx / m * w]); R.push([c[i][0] + dy / m * w, c[i][1] - dx / m * w]);
+    }
+    R.reverse();
+    return bfySm(L) + `L${P(R[0][0], R[0][1])}` + bfySegs(R, false).join('') + 'Z';
+  }
+  // Cánh hoa nhọn: gốc (x, y), dài L, nửa rộng w, góc ang (-90 = lên)
+  function bfyPetalD(x, y, L, w, ang) {
+    const a = ang * R2, ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux;
+    const q = (k, s) => P(x + ux * L * k + nx * w * s, y + uy * L * k + ny * w * s);
+    return `M${P(x, y)}C${q(.12, 1)} ${q(.62, 1.15)} ${q(1, 0)}C${q(.62, -1.15)} ${q(.12, -1)} ${P(x, y)}Z`;
+  }
+  // Hoa 5 cánh nhọn (một path) + nhụy vàng
+  const bfyBloom = (x, y, r, col = PINK, mid = GOLD, sw = 2, rot = 0) =>
+    pa([0, 72, 144, 216, 288].map(a => bfyPetalD(x, y, r, r * .46, a - 90 + rot)).join(''), col, sw) + ci(x, y, r * .3, mid, sw * .75);
+  // Viền lông xù quanh elip (cổ áo lông)
+  function bfyFluffD(cx, cy, rx, ry, n, k = .25, a0 = 0, a1 = 360) {
+    const pt = a => [cx + rx * Math.cos(a * R2), cy + ry * Math.sin(a * R2)], st = (a1 - a0) / n;
+    let d = `M${P(...pt(a0))}`;
+    for (let i = 0; i < n; i++) { const m = pt(a0 + (i + .5) * st); d += `Q${P(cx + (m[0] - cx) * (1 + k), cy + (m[1] - cy) * (1 + k))} ${P(...pt(a0 + (i + 1) * st))}`; }
+    return d + 'Z';
+  }
+  // Râu xoắn: gốc b → đỉnh vòng xoắn tâm (cx, cy) bán kính r, sd = 1 xoắn theo chiều kim đồng hồ (bên phải)
+  function bfyCurl(b, cx, cy, r, sd, turns = 1.15, n = 9) {
+    const top = [cx, cy - r], pts_ = [b, [b[0] + (top[0] - b[0]) * .45 - sd * r * .3, b[1] + (top[1] - b[1]) * .55], [cx - sd * r * .75, cy - r * .9]];
+    for (let k = 0; k <= n; k++) {
+      const a = (-90 + sd * k * turns * 360 / n) * R2, rr = r * (1 - .62 * k / n);
+      pts_.push([cx + rr * Math.cos(a), cy + rr * Math.sin(a)]);
+    }
+    return pts_;
+  }
+  const bfyMir = (s, ax = 100) => s ? `<g transform="matrix(-1 0 0 1 ${f1(ax * 2)} 0)">${s}</g>` : '';
+  const bfyMp = (a, ax = 100) => a.map(([x, y]) => [ax * 2 - x, y]);
+
+  /* ----- Mặt ----- */
+  const bfyIris = () => lin('#7a1a66', '#ff5fa2', '#ffd6ec');
+  function bfyEyeCute(cx, cy, r, dx = 0, sw = 3.4) {
+    const px = cx + dx * r, py = cy + r * .14;
+    return el(cx, cy, r, r * 1.1, '#fff', sw) + el(px, py, r * .74, r * .8, bfyIris(), 0) + el(px, py, r * .42, r * .48, OL, 0) +
+      ci(px - r * .3, py - r * .34, r * .27, '#fff', 0) + ci(px + r * .3, py + r * .3, r * .12, '#fff', 0);
+  }
+  // Mắt dạng 3–4: to, long lanh; mí trên là nét kẻ mi dày ôm mép trên, vểnh ở đuôi (hiền, uy nghi, không cau có)
+  function bfyEyeS(cx, cy, rx, ry, sd, o = {}) {
+    const px = cx - sd * rx * .06, py = cy + ry * .12, pr = rx * .72;
+    const E = a => [cx + rx * Math.cos(a * R2), cy + ry * Math.sin(a * R2)], a0 = sd > 0 ? 196 : 344, a1 = sd > 0 ? 338 : 202;
+    const p0 = E(a0), p1 = E(a1);
+    let s = el(cx, cy, rx, ry, '#fff', 2.6) + el(px, py, pr, pr * 1.16, o.iris || bfyIris(), 0) + el(px, py + pr * .1, pr * .5, pr * .6, OL, 0);
+    s += ci(px - pr * .36, py - pr * .34, pr * .3, '#fff', 0) + ci(px + pr * .36, py + pr * .44, pr * .13, '#fff', 0);
+    if (o.star) s += spark4(px + pr * .34, py - pr * .46, pr * .3, '#fff', 0);
+    s += ln(`M${P(...p0)}A${f1(rx)},${f1(ry)} 0 0 ${sd > 0 ? 1 : 0} ${P(...p1)}q${f1(sd * 4)},-.5 ${f1(sd * 7)},-6`, OL, o.lw || 4.6);
+    s += ln(`M${P(p1[0] - sd * 1.5, p1[1] - 2.5)}l${f1(sd * 2.4)},-5.5M${P(...E(sd > 0 ? 300 : 240))}l${f1(sd * 1.6)},-4.5`, OL, 2.4);
+    return s;
+  }
+  const bfyBlush = (x, y, rx = 6, ry = 3.6) => el(x, y, rx, ry, '#ff8fb8', 0, 'opacity=".65"');
+  const bfySmile = (x, y, w, open) => open ? pa(`M${P(x - w, y)}Q${P(x, y + w * 1.3)} ${P(x + w, y)}Q${P(x, y + w * .35)} ${P(x - w, y)}Z`, '#a8204f', 2.8) + el(x, y + w * .58, w * .45, w * .2, '#ff7a9a', 0) : ln(`M${P(x - w, y)}Q${P(x, y + w * .8)} ${P(x + w, y)}`, OL, 3);
+  // Đốm mắt trên cánh / thân: viền vàng, hồng, tâm tím than, chấm sáng
+  const bfyOcel = (x, y, r, mid = PINK) => ci(x, y, r, GOLD, Math.max(1.6, r * .26)) + ci(x, y, r * .66, mid, 0) + ci(x, y, r * .34, OL, 0) + ci(x - r * .16, y - r * .18, r * .14, '#fff', 0);
+
+  /* ----- Hiệu ứng (bỏ trong bản nhẹ) ----- */
+  const bfyFly = (x, y, r = 2.6, d = 0, col = '#d6ff4a') => PET_LITE ? '' : `<g class="twinkle" style="animation-delay:-${f1(d)}s"><circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r * 2.5)}" fill="${col}" opacity=".28"/><circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r * 1.5)}" fill="${col}" opacity=".7"/><circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r * .85)}" fill="#fffde0"/></g>`;
+  const bfyGlow = (x, y, r, col) => PET_LITE ? '' : [1, .8, .6].map(k => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r * k)}" fill="${col}" opacity=".09"/>`).join('') + `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r * .7)}" fill="url(#gGlow)" opacity=".3"/>`;
+  const bfyNeo = (head, eyes, neck, back, body, halo) => ({ head, eyes, neck, back, body, halo: halo || [head[0], head[1] - 20, head[2] * .47] });
+
+  /* ===================== DẠNG 1: SÂU NON ===================== */
+  function bfy1(c) {
+    let back = '', body = '', head = '', front = '';
+    const seg = [[86, 148, 21], [105, 161, 20], [125, 167, 18.5], [144, 166, 17], [160, 158, 14.5], [170, 146, 11.5]];
+    // Sừng đuôi vàng mềm
+    back += pa(bfyTaper(bfySample([[170, 140], [174, 128], [183, 120], [191, 123]], false, 3), 8, 2.5), cel(GOLD, GOLDS), 3.5);
+    // Thân đốt tròn gộp một viền
+    body += bl(seg.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join(''), cel(c.b, c.s));
+    // Bụng sáng từng đốt
+    body += seg.map(([x, y, r]) => el(x, y + r * .5, r * .7, r * .36, c.l, 0)).join('');
+    // Vạch nối đốt
+    let jd = '';
+    for (let i = 0; i < seg.length - 1; i++) {
+      const [x1, y1, r1] = seg[i], [x2, y2, r2] = seg[i + 1], dx = x2 - x1, dy = y2 - y1, m = Math.hypot(dx, dy), nx = -dy / m, ny = dx / m, mx_ = x1 + dx * r1 / (r1 + r2), my = y1 + dy * r1 / (r1 + r2), w = (r1 + r2) * .42;
+      jd += `M${P(mx_ + nx * w, my + ny * w)}Q${P(mx_ - dx / m * 3, my - dy / m * 3)} ${P(mx_ - nx * w, my - ny * w)}`;
+    }
+    body += ln(jd, c.s, 2.4);
+    // Chân giả mũm mĩm
+    body += seg.slice(1, 5).map(([x, y, r]) => el(x - 2, y + r - 1.5, 5.2, 4, c.ls, 2.6)).join('');
+    // Đốm như mắt + chấm hồng + nốt vàng trên lưng
+    body += seg.slice(1, 5).map(([x, y, r], i) => bfyOcel(x - r * .05, y - r * .32, r * .3 - i * .2) + ci(x + r * .42, y + r * .02, 2.3, PINK, 0) + ci(x - r * .25, y - r * .9, 2.8, GOLD, 1.8)).join('');
+    body += hl(96, 148, 7, 3.5, -30, .5);
+    // Râu ngắn chùy vàng
+    head += ln('M62,90Q52,84 46,72M96,88Q106,82 112,66', OL, 3.2) + ci(46, 71, 4, GOLD, 2.2) + ci(112, 65, 4, GOLD, 2.2);
+    // Đầu tròn sáng
+    head += bl('<ellipse cx="79" cy="111" rx="31" ry="29"/>', cel('#7af2d2', c.s));
+    head += hl(64, 98, 8, 4, -30, .55);
+    head += bfyEyeCute(67, 113, 10.5, .06) + bfyEyeCute(92, 113, 10.5, -.06);
+    head += bfyBlush(56, 126) + bfyBlush(103, 126) + bfySmile(79.5, 126, 5.5, true);
+    // Lá đội đầu + cuống xoăn + hoa nhỏ
+    head += pa('M108,90C102,62 66,54 38,80C54,98 90,101 108,90Z', cel('#8af06a', '#2f9a3e'), 4);
+    head += ln('M107,90Q76,80 41,80', '#2f9a3e', 2.4) + ln('M94,86l-8,-11M80,84l-8,-12M66,82l-7,-11M53,81l-5,-8M93,88l-6,6M79,86l-6,7M65,84l-6,6', '#2f9a3e', 1.8, 'opacity=".8"');
+    head += ln('M106,90C114,86 116,74 110,72C105,71 104,77 108,78', OL, 6.5) + ln('M106,90C114,86 116,74 110,72C105,71 104,77 108,78', '#7be35a', 2.8);
+    head += bfyBloom(98, 80, 7.5, PINK, GOLD, 2);
+    if (!PET_LITE) front += spark4(36, 112, 5, '#fff6b0', 1.8, 'twinkle', 0) + spark4(176, 100, 4, '#bfffe6', 1.6, 'twinkle', .6);
+    return { back, body, head, front, anc: bfyNeo([79, 82, 50], [79.5, 113, 50], [86, 136, 40], [124, 148, 62, 36], [112, 160, 44, 28], [79, 60, 24]) };
+  }
+
+  /* ===================== DẠNG 2: KÉN VÀNG KIM ===================== */
+  function bfy2(c) {
+    let back = '', body = '', head = '', front = '';
+    // Cành mọc từ gốc rễ, uốn móc câu
+    const br = bfySample([[152, 190], [158, 164], [158, 136], [152, 106], [142, 76], [128, 52], [112, 38], [96, 34], [80, 38]], false, 3);
+    back += pa('M138,190Q150,184 152,172L162,172Q162,184 174,190Z', cel('#b8743a', '#7a4418'), 3.5);
+    back += pa(bfyTaper(br, 17, 7), cel('#c07a3c', '#7a4418'), 4.5);
+    back += ln('M153,176l4,-3M157,148l-4,-3M153,118l4,-4M144,88l-4,-2M128,60l3,-4', '#7a4418', 2.4);
+    back += leaf(149, 98, 24, -8, '#7be35a', '#2f9a3e', 3) + leaf(158, 136, 20, 22, '#9df27a', '#2f9a3e', 3) + leaf(155, 160, 18, -30, '#7be35a', '#2f9a3e', 3) + leaf(82, 38, 22, 165, '#9df27a', '#2f9a3e', 3) + leaf(84, 37, 16, -140, '#7be35a', '#2f9a3e', 2.6);
+    back += bfyBloom(130, 45, 7.5) + bfyBloom(145, 68, 5.5, PINKL);
+    back += pa('M134,190Q142,178 150,186Q156,176 164,186Q172,178 178,190Z', cel('#5ad04a', '#2f9a3e'), 3);
+    // Sợi tơ treo kén
+    back += ln('M100,36V66', OL, 6) + ln('M100,36V66', '#fff6d0', 2.4) + ci(100, 38, 3.6, GOLD, 2);
+    if (!PET_LITE) back += `<ellipse cx="100" cy="112" rx="60" ry="70" fill="#fff6b0" opacity=".14"/><ellipse cx="100" cy="102" rx="48" ry="32" fill="#fff6b0" opacity=".2"/>`;
+    // Vỏ kén: viền Catmull-Rom, tách đôi theo đường nứt (nửa trên nằm ở lớp đầu nên khẽ nhấc theo nhịp)
+    const T = [[100, 53], [124, 61], [140, 98], [135, 134], [119, 162], [100, 176], [81, 162], [65, 134], [60, 98], [76, 61]];
+    const S = bfySegs(T, true);
+    const U = [[132, 92], [122, 83], [112, 88], [100, 79], [88, 88], [78, 83], [68, 92]];
+    const Lz = [[68, 104], [78, 114], [88, 110], [100, 121], [112, 110], [122, 114], [132, 104]];
+    const top = `M60,98${S[8]}${S[9]}${S[0]}${S[1]}` + U.map(p => 'L' + P(...p)).join('') + 'Z';
+    const bot = `M140,98${S[2]}${S[3]}${S[4]}${S[5]}${S[6]}${S[7]}` + Lz.map(p => 'L' + P(...p)).join('') + 'Z';
+    const gap = 'M60,98' + Lz.map(p => 'L' + P(...p)).join('') + 'L140,98' + U.map(p => 'L' + P(...p)).join('') + 'Z';
+    body += `<path d="${gap}" fill="#3fd8b4" stroke="#fff3a0" stroke-width="12" stroke-linejoin="round"/>` + el(100, 116, 30, 7, '#1f9a80', 0, 'opacity=".45"');
+    body += pa(bot, cel('#ffd84a', '#e09a10'), 4.2);
+    // Gân cánh in qua vỏ, chấm vàng sáng
+    body += ln('M78,116C82,140 96,156 112,164M122,116C120,136 113,150 104,158', '#c07a00', 2.6) + ln('M100,112V172', '#c07a00', 2, 'opacity=".5"');
+    body += [[85, 130], [115, 130], [92, 150], [108, 150], [100, 166]].map(([x, y]) => ci(x, y, 2.1, '#fffbe0', 0)).join('');
+    body += hl(77, 124, 4, 10, 15, .45) + pa('M94,174Q100,186 106,174Z', GOLD, 2.6);
+    // Mắt nhìn ra từ khe, nắp kén phủ lên
+    head += bfyEyeCute(87.5, 98.5, 9, .12, 2.8) + bfyEyeCute(112.5, 98.5, 9, -.12, 2.8) + bfyBlush(78, 108, 4.5, 2.6) + bfyBlush(122, 108, 4.5, 2.6) + bfySmile(100, 110, 3.6, true);
+    head += pa(top, cel('#ffe066', '#e09a10'), 4.2);
+    head += pa('M73,69Q100,78 127,69L130,78Q100,89 70,78Z', cel(EM, EMS), 2.8) + [80, 90, 100, 110, 120].map((x, i) => ci(x, 79 + [0, 2.2, 3.3, 2.2, 0][i], 2.4, GOLD, 1.3)).join('');
+    head += hl(86, 64, 8, 3.4, -25, .6);
+    // Tia sáng từ khe nứt, mảnh vỏ bay, lấp lánh
+    if (!PET_LITE) {
+      let rays = '';
+      for (const [x, y, sd] of [[133, 98, 1], [67, 98, -1]]) for (const a of [-34, -4, 24]) {
+        const A = (sd > 0 ? a : 180 - a) * R2, L = a === -4 ? 44 : 32;
+        rays += `M${P(x, y)}L${P(x + Math.cos(A - .1) * L, y + Math.sin(A - .1) * L)}L${P(x + Math.cos(A + .1) * L, y + Math.sin(A + .1) * L)}Z`;
+      }
+      front += `<g class="twinkle"><path d="${rays}" fill="#fff6b0" opacity=".75"/></g>`;
+      front += `<g class="float">` + pa('M152,72l9,-3l-3,9Z', '#ffd84a', 2.2) + pa('M42,84l8,2l-6,6Z', '#ffd84a', 2.2) + `</g>`;
+      front += spark4(36, 62, 6, '#fff6b0', 1.8, 'twinkle', 0) + spark4(172, 114, 5, '#fff6b0', 1.8, 'twinkle', .7) + spark4(46, 146, 4, '#bfffe6', 1.6, 'twinkle', 1.2);
+    }
+    return { back, body, head, front, anc: bfyNeo([100, 57, 46], [100, 99, 46], [100, 126, 56], [100, 70, 68, 98], [100, 140, 60, 52], [100, 44, 22]) };
+  }
+
+  /* ===================== DẠNG 3: BƯỚM VỪA NỞ ===================== */
+  function bfyWing3() {
+    let s = '';
+    // Cánh sau: quạt tròn nhỏ, đốm mắt lớn
+    const H2 = [104, 130], hw = [H2, [124, 125], [146, 128], [162, 142], [163, 162], [149, 174], [130, 170], [115, 155]];
+    const hwi = hw.map(([x, y]) => [H2[0] + (x - H2[0]) * .78, H2[1] + (y - H2[1]) * .78]);
+    s += pa(bfySm(hw, true), cel('#11906a', '#06503f'), 5) + pa(bfySm(hwi, true), cel('#3fe0a8', '#14a078'), 0);
+    s += ln('M106,132Q130,136 156,150M106,134Q124,146 138,168M106,131Q130,126 150,134', '#0b6e50', 2.2, 'opacity=".8"');
+    s += hw.slice(2, 7).map(([x, y], i) => ci(x + (H2[0] - x) * .1, y + (H2[1] - y) * .1, 2.2, i % 2 ? '#fff6b0' : '#ffffff', 0)).join('');
+    s += bfyOcel(143, 152, 8.5);
+    // Cánh trước: lá lớn dựng đứng (cánh vừa nở đang hong khô), gân lá
+    const H = [104, 120], fw = [H, [110, 96], [116, 68], [124, 42], [134, 20], [146, 8], [157, 13], [164, 34], [165, 62], [159, 88], [144, 108], [122, 121]];
+    const fwi = fw.map(([x, y]) => [H[0] + (x - H[0]) * .84, H[1] + (y - H[1]) * .84]);
+    s += pa(bfySm(fw, true), cel('#11906a', '#06503f'), 5.5) + pa(bfySm(fwi, true), cel('#4ff0b0', '#16a87c'), 0);
+    s += pa(bfyPetalD(106, 118, 50, 12, -74), PINKL, 0, 'opacity=".7"');
+    s += ln('M106,118C118,88 132,48 146,14', '#0b6e50', 2.8) + ln('M114,100L110,86M120,82L116,64M126,64L124,46M133,46L132,30M118,96L134,94M124,78L144,74M130,60L150,54M137,42L154,36', '#0b6e50', 2.2, 'opacity=".85"');
+    s += fw.slice(3, 10).map(([x, y], i) => ci(x + (H[0] - x) * .08, y + (H[1] - y) * .08, 2.4, i % 2 ? '#fff6b0' : '#ffffff', 0)).join('');
+    s += bfyOcel(150, 30, 5.5, '#ff8cc4') + hl(128, 60, 11, 4, -70, .45);
+    return `<g class="sway" style="transform-origin:0% 62%">${s}</g>`;
+  }
+  function bfy3(c) {
+    let back = '', body = '', head = '', front = '';
+    const w = bfyWing3();
+    back += bfyGlow(100, 100, 80, JADE) + w + bfyMir(w);
+    // Chân + giày vàng
+    for (const sd of [-1, 1]) body += ln(`M${P(100 + sd * 8, 164)}L${P(100 + sd * 10, 181)}`, OL, 9) + ln(`M${P(100 + sd * 8, 164)}L${P(100 + sd * 10, 181)}`, '#0f6e58', 4.5) + el(100 + sd * 12, 184.5, 7.5, 4.6, cel(GOLD, GOLDS), 3);
+    // Thân giọt nước ngọc, hoa văn vàng
+    body += pa(bfySm([[100, 112], [116, 120], [120, 140], [114, 162], [100, 172], [86, 162], [80, 140], [84, 120]], true), cel('#2fd6a0', EMS), 5);
+    body += ln('M90,146L100,153L110,146M92,158L100,164L108,158', GOLD, 3) + ci(100, 139, 3, PINK, 1.6);
+    body += hl(90, 134, 4, 8, 15, .45);
+    // Tay nhỏ
+    for (const sd of [-1, 1]) body += ln(`M${P(100 + sd * 15, 130)}Q${P(100 + sd * 26, 136)} ${P(100 + sd * 27, 148)}`, OL, 10) + ln(`M${P(100 + sd * 15, 130)}Q${P(100 + sd * 26, 136)} ${P(100 + sd * 27, 148)}`, '#2fd6a0', 5) + ci(100 + sd * 27, 149, 5, '#7af2d2', 2.6);
+    // Cổ áo lông kem
+    body += pa(bfyFluffD(100, 119, 22, 8, 9, .35), CREAM, 3.6);
+    // Râu xoắn
+    const an = bfyCurl([103, 66], 113, 36, 7.5, -1, 1.15, 6), tip = an[an.length - 1];
+    const ad = bfySm(an) + bfySm(bfyMp(an));
+    head += ln(ad, OL, 7) + ln(ad, '#0f6e58', 3) + ci(tip[0], tip[1], 3.4, GOLD, 2) + ci(200 - tip[0], tip[1], 3.4, GOLD, 2);
+    // Đầu
+    const sk = '#5ff0c8';
+    head += bl('<ellipse cx="100" cy="91" rx="31" ry="28"/>', cel(sk, '#16a080'));
+    head += el(100, 104, 20, 8, '#c8fff0', 0, 'opacity=".55"') + hl(84, 76, 8, 4, -30, .55);
+    head += bfyEyeS(87, 93, 10, 11.5, -1, { skin: sk, h: .62 }) + bfyEyeS(113, 93, 10, 11.5, 1, { skin: sk, h: .62 });
+    head += bfyBlush(76, 106) + bfyBlush(124, 106) + bfySmile(100, 106, 4.6, true);
+    if (!PET_LITE) front += bfyFly(30, 70, 2.4, 0, '#bfffe6') + bfyFly(176, 96, 2.6, .7, '#fff6b0') + spark4(164, 184, 4, '#fff6b0', 1.6, 'twinkle', .4) + spark4(30, 150, 4.5, '#bfffe6', 1.6, 'twinkle', 1);
+    return { back, body, head, front, anc: bfyNeo([100, 64, 50], [100, 93, 56], [100, 117, 40], [100, 116, 44, 60], [100, 144, 38, 44], [100, 42, 24]) };
+  }
+
+  /* ===================== DẠNG 4: BƯỚM THẦN ===================== */
+  // Cánh kính màu: pts kín (pts[0] = gốc cánh); rings: tỉ lệ vòng; nS: số ô quanh; col(k, j) màu ô (null = để màu nền)
+  function bfyGlass(pts, rings, nS, col, per = 2) {
+    const H = pts[0], n = pts.length, Sm = bfySample(pts, true, per), E = Sm.slice(per, (n - 1) * per + 1);
+    const at = (e, t) => [H[0] + (E[e][0] - H[0]) * t, H[1] + (E[e][1] - H[1]) * t];
+    const bd = []; for (let k = 0; k <= nS; k++) bd.push(Math.round(k * (E.length - 1) / nS));
+    const byCol = {}; let lead = '';
+    for (let k = 0; k < nS; k++) for (let j = 1; j < rings.length; j++) {
+      const t0 = rings[j - 1], t1 = rings[j], cc = col(k, j - 1); if (!cc) continue;
+      const o = []; for (let e = bd[k]; e <= bd[k + 1]; e++) o.push(Q0(...at(e, t1)));
+      const i_ = []; if (t0 > 0) for (let e = bd[k + 1]; e >= bd[k]; e--) i_.push(Q0(...at(e, t0)));
+      byCol[cc] = (byCol[cc] || '') + `M${(t0 > 0 ? i_ : [Q0(...H)]).concat(o).join('L')}Z`;
+    }
+    for (let k = 1; k < nS; k++) lead += `M${Q0(...at(bd[k], rings[1] * .55))}L${Q0(...E[bd[k]])}`;
+    for (const t of rings.slice(1, -1)) lead += 'M' + E.map((_, e) => Q0(...at(e, t))).join('L');
+    const cells = Object.entries(byCol).map(([cc, d]) => `<path d="${d}" fill="${cc}"/>`).join('');
+    return { d: bfySm(pts, true), cells, lead, E, at, bd };
+  }
+  function bfyWing4() {
+    let s = '';
+    // Đuôi cánh dài như dải lụa: gốc rộng liền cánh sau, thuôn nhọn, sọc hồng–vàng, giọt ngọc ở chóp
+    const tail = [[144, 154], [149, 171], [158, 185], [172, 193], [186, 195]];
+    s += pa(bfyTaper(tail, 26, 3), cel('#2ad6c8', '#0f8a6a'), 4.5) + ln(bfySm([[146, 160], [152, 175], [162, 186], [178, 193]]), '#ff9ccd', 3.4) + ln(bfySm([[146, 160], [152, 175], [162, 186], [178, 193]]), GOLD, 1.4);
+    s += pa('M186,195Q193,190 194,196Q192,202 186,195Z', JADE, 2.2);
+    // Cánh sau kính màu + đốm mắt
+    const hw = [[106, 112], [136, 112], [166, 118], [186, 132], [188, 152], [174, 166], [152, 170], [132, 160], [116, 140]];
+    const HG = bfyGlass(hw, [0, .42, .76, 1], 5, (k, j) => j === 0 ? null : j === 1 ? (k % 2 ? '#ff9ccd' : '#ffe27a') : (k % 2 ? '#14b884' : '#2ad6c8'));
+    s += pa(HG.d, '#c8fff0', 10) + HG.cells + ln(HG.lead, OL, 4.4) + ln(HG.lead, GOLD, 1.9);
+    s += bfyOcel(168, 146, 10.5);
+    // Cánh trước kính màu lớn
+    const fw = [[106, 100], [118, 76], [136, 50], [160, 26], [184, 10], [197, 15], [198, 36], [194, 62], [182, 86], [160, 104], [132, 112]];
+    const FG = bfyGlass(fw, [0, .36, .7, 1], 6, (k, j) => j === 0 ? null : j === 1 ? (k % 2 ? '#ffe27a' : '#ff9ccd') : (k % 2 ? '#2ad6c8' : '#14b884'));
+    s += pa(FG.d, '#c8fff0', 11) + FG.cells + ln(FG.lead, OL, 4.6) + ln(FG.lead, GOLD, 2);
+    // Ngọc đính ô ngoài + vệt sáng kính
+    for (let k = 0; k < 6; k++) { const e = Math.round((FG.bd[k] + FG.bd[k + 1]) / 2), [x, y] = FG.at(e, .86); s += ci(x, y, 2.6, k % 2 ? '#fff6b0' : '#ffd6ec', 1.4); }
+    s += ln('M128,78L150,52M134,90L170,48', '#fff', 3, 'opacity=".45"');
+    return `<g class="sway" style="transform-origin:0% 55%">${s}</g>`;
+  }
+  function bfy4(c) {
+    let back = '', body = '', head = '', front = '';
+    back += bfyGlow(100, 100, 98, JADE);
+    // Cánh hoa xoáy quanh (một nửa sau lưng, một nửa trước mặt; quay cùng nhịp)
+    const swirl = angs => PET_LITE ? '' : `<g class="spin">` + angs.map((a, i) => { const x = 100 + Math.cos(a * R2) * 90, y = 105 + Math.sin(a * R2) * 90; return pa(bfyPetalD(x, y, 12, 5, a + 100), i % 2 ? '#ffe27a' : '#ffb3d6', 2.2); }).join('') + `</g>`;
+    back += swirl([30, 150, 270]);
+    const w = bfyWing4();
+    back += w + bfyMir(w);
+    // Thân ngọc: bụng giọt nước, hoa văn vàng chữ V, chóp ngọc treo
+    body += pa('M94,160Q100,178 106,160Z', cel(GOLD, GOLDS), 3) + ci(100, 168, 2.6, JADE, 1.4);
+    body += pa(bfySm([[100, 102], [112, 110], [114, 128], [108, 146], [100, 162], [92, 146], [86, 128], [88, 110]], true), cel('#18c890', EMS), 5);
+    body += ln('M92,124L100,130L108,124M93,136L100,142L107,136M95,148L100,152L105,148', GOLD, 2.8) + ci(100, 116, 2.8, PINK, 1.6);
+    body += hl(93, 116, 3, 7, 12, .45);
+    // Bờm cổ lông kem + trâm ngọc
+    body += pa(bfyFluffD(100, 100, 23, 11, 11, .42), CREAM, 3.5) + pa(bfyFluffD(100, 101, 15, 6.5, 8, .35), '#ffe9a8', 0);
+    body += ci(100, 106, 4.6, 'url(#gGold)', 2.2) + ci(100, 106, 2.4, JADE, 0);
+    // Râu dài xoắn, đầu râu phát sáng
+    const an = bfyCurl([106, 52], 132, 18, 8, 1, 1.2, 6), tip = an[an.length - 1];
+    const ad = bfySm(an) + bfySm(bfyMp(an));
+    head += ln(ad, OL, 6.5) + ln(ad, '#0f6e58', 2.8);
+    if (!PET_LITE) head += ci(tip[0], tip[1], 8, GOLD, 0, 'opacity=".35"') + ci(200 - tip[0], tip[1], 8, GOLD, 0, 'opacity=".35"');
+    head += ci(tip[0], tip[1], 3.6, '#fff6b0', 2) + ci(200 - tip[0], tip[1], 3.6, '#fff6b0', 2);
+    // Đầu
+    const sk = '#3fe0b0';
+    head += bl('<ellipse cx="100" cy="72" rx="27" ry="25"/>', cel(sk, '#0d7a62'));
+    head += hl(86, 61, 7, 3.5, -30, .55);
+    const eo = { skin: sk, h: .52, iris: lin('#0f8a6a', '#5dffc0', '#e0fff4'), star: 1 };
+    head += bfyEyeS(88.5, 74, 9.2, 10.4, -1, eo) + bfyEyeS(111.5, 74, 9.2, 10.4, 1, eo);
+    head += bfyBlush(79, 87, 5, 3) + bfyBlush(121, 87, 5, 3) + ln('M95,88Q100,92 105,88', OL, 3);
+    // Vương miện hoa: lá vàng, chóp ngọc, hoa hồng
+    head += pa(bfyPetalD(100, 52, 32, 8.5, -90) + bfyPetalD(93, 53, 24, 6.5, -128) + bfyPetalD(107, 53, 24, 6.5, -52) + bfyPetalD(86, 56, 16, 5, -150) + bfyPetalD(114, 56, 16, 5, -30), 'url(#gGold)', 3.2);
+    head += ln('M77,58Q100,45 123,58', OL, 7) + ln('M77,58Q100,45 123,58', GOLD, 3.4);
+    head += pa('M100,27L106,36L100,45L94,36Z', JADE, 2.4) + `<circle cx="98.3" cy="33.5" r="1.6" fill="#fff"/>`;
+    head += bfyBloom(83, 53, 9.5) + bfyBloom(117, 53, 9.5) + bfyBloom(71, 61, 6, PINKL, '#fff6b0', 1.8) + bfyBloom(129, 61, 6, PINKL, '#fff6b0', 1.8) + ci(100, 52, 3.2, '#ff3b8a', 1.6);
+    // Phấn sáng, đom đóm, cánh hoa (lớp trước)
+    if (!PET_LITE) {
+      front += swirl([90, 210, 330]);
+      front += [[26, 130, 2.6, 0, '#d6ff4a'], [174, 128, 2.8, .5, '#d6ff4a'], [52, 18, 2.2, 1, '#ffe27a'], [64, 170, 2.4, 1.2, '#ffe27a'], [136, 168, 2.4, .2, '#d6ff4a']].map(([x, y, r, d, col]) => bfyFly(x, y, r, d, col)).join('');
+      front += [[78, 178, 0], [122, 176, .9], [100, 188, 1.6]].map(([x, y, d]) => `<g class="ember" style="animation-delay:-${d}s">${ci(x, y, 2.2, '#fff6b0', 1.2)}</g>`).join('');
+    }
+    return { back, body, head, front, anc: bfyNeo([100, 48, 50], [100, 75, 50], [100, 97, 38], [100, 98, 44, 64], [100, 124, 32, 44], [100, 22, 24]) };
+  }
+
+  PET_SPECS.ep_butterfly = {
+    el: 'forest',
+    c: { b: '#3fe0b8', s: '#14967a', l: '#e6fff6', ls: '#a8ecd4', i: '#ff5fa2', a: GOLD },
+    c4: { b: '#18c890', s: '#0a6e52', l: '#c8fff0', ls: '#7ae8c0', i: '#7dffcf', a: GOLD },
+    draw(f, g, c) {
+      const C = f >= 4 ? Object.assign({}, this.c, this.c4) : this.c;
+      return [null, bfy1, bfy2, bfy3, bfy4][f](C);
+    }
+  };
+})();
+
+/* ===================== SỬ THI · CÁ VOI NGÂN HÀ (ep_whale, hệ Bóng đêm) =====================
+   Cá voi con giọt sao → cá voi non bơi ngang, bụng vạch sáng → cá voi trưởng thành dựng mình, vây cánh, đuôi kéo vệt sao
+   → Cá Voi Ngân Hà khổng lồ uốn hình trăng khuyết, thân chứa tinh vân và hành tinh nhỏ, cánh ánh sáng, vương miện trăng, sao băng.
+   Nạp SAU gfx.js và pets.js. Chỉ thêm PET_SPECS.ep_whale; mọi hàm phụ nằm trong IIFE, tiền tố whl.
+   Dùng lõi gfx.js: pa, el, ci, ln, hl, bl, cel, lin, spark4, P, f1, OL; và PET_LITE của pets.js (bỏ hiệu ứng ở trại chung).
+   draw(f, g, c) không dùng g (RIG): mỗi dạng một hàm vẽ riêng, trả { back, body, head, front, anc }, anc.halo = [x, y, rx] cho hào quang. */
+(() => {
+  const RAD = Math.PI / 180;
+  const whlFx = s => (typeof PET_LITE !== 'undefined' && PET_LITE) ? '' : s;
+  const whlP = p => P(p[0], p[1]);
+  const whlMid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  // Đường cong mượt qua dãy điểm (bậc hai qua trung điểm)
+  function whlSmooth(p, closed) {
+    const n = p.length;
+    if (closed) {
+      let d = 'M' + whlP(whlMid(p[n - 1], p[0]));
+      for (let i = 0; i < n; i++) d += 'Q' + whlP(p[i]) + ' ' + whlP(whlMid(p[i], p[(i + 1) % n]));
+      return d + 'Z';
+    }
+    let d = 'M' + whlP(p[0]);
+    for (let i = 1; i < n - 1; i++) d += 'Q' + whlP(p[i]) + ' ' + whlP(whlMid(p[i], p[i + 1]));
+    return d + 'L' + whlP(p[n - 1]);
+  }
+  // Thân dạng ống thon theo xương sống (Catmull-Rom), ws = nửa bề dày tại từng điểm điều khiển
+  function whlTube(sp, ws, n = 5) {
+    const C = [], W = [];
+    for (let i = 0; i < sp.length - 1; i++) {
+      const a = sp[i - 1] || sp[i], b = sp[i], c = sp[i + 1], d = sp[i + 2] || c;
+      for (let k = 0; k < n; k++) {
+        const t = k / n, t2 = t * t, t3 = t2 * t;
+        C.push([0, 1].map(j => .5 * (2 * b[j] + (c[j] - a[j]) * t + (2 * a[j] - 5 * b[j] + 4 * c[j] - d[j]) * t2 + (3 * b[j] - a[j] - 3 * c[j] + d[j]) * t3)));
+        W.push(ws[i] + (ws[i + 1] - ws[i]) * (3 - 2 * t) * t * t);
+      }
+    }
+    C.push(sp[sp.length - 1]); W.push(ws[ws.length - 1]);
+    const m = C.length, N = C.map((p, i) => {
+      const a = C[Math.max(0, i - 1)], b = C[Math.min(m - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
+      return [-dy / L, dx / L];
+    });
+    const at = (i, v) => [C[i][0] + N[i][0] * v, C[i][1] + N[i][1] * v];
+    const idx = t => Math.max(0, Math.min(m - 1, Math.round(t * (m - 1))));
+    // điểm tại tỉ lệ t dọc thân, lệch vf × nửa bề dày; kèm góc tiếp tuyến (độ)
+    const pt = (t, vf) => { const i = idx(t); return at(i, vf * W[i]); };
+    const ang = t => { const i = idx(t); return Math.atan2(N[i][0], -N[i][1]) / RAD; };
+    return { C, W, N, m, at, idx, pt, ang };
+  }
+  const whlOutline = T => whlSmooth(T.C.map((_, i) => T.at(i, T.W[i])).concat(T.C.map((_, i) => T.at(T.m - 1 - i, -T.W[T.m - 1 - i]))), true);
+  // Chỉ số mẫu từ a tới b, bước 2 (luôn gồm điểm cuối): đủ mượt mà chuỗi SVG ngắn một nửa
+  const whlIdx = (a, b) => { const r = []; for (let i = a; i < b; i += 2) r.push(i); r.push(b); return r; };
+  // Dải dọc thân từ t0 tới t1 (tỉ lệ dọc thân); mép trong/ngoài là hàm (u, w) → độ lệch theo pháp tuyến, w = nửa bề dày tại đó
+  function whlBand(T, t0, t1, v1, v2) {
+    const a = T.idx(t0), b = T.idx(t1), A = [], B = [];
+    for (const i of whlIdx(a, b)) { const u = (i - a) / Math.max(1, b - a); A.push(T.at(i, v1(u, T.W[i]))); B.push(T.at(i, v2(u, T.W[i]))); }
+    return whlSmooth(A.concat(B.reverse()), true);
+  }
+  function whlLine(T, t0, t1, v) {
+    const a = T.idx(t0), b = T.idx(t1);
+    return whlSmooth(whlIdx(a, b).map(i => T.at(i, v((i - a) / Math.max(1, b - a), T.W[i]))), false);
+  }
+  const whlBell = (u, p = .7) => Math.pow(Math.max(0, Math.sin(Math.PI * u)), p);
+  // Vây đuôi tại cuối xương sống: S nửa sải, L độ vươn của hai chóp
+  function whlFluke(T, S, L, fill, sw = 5, tilt = 0) {
+    const i = T.m - 1, E = T.C[i], n = T.N[i], t = [n[1], -n[0]];
+    const q = (u, v) => [E[0] + t[0] * u + n[0] * v, E[1] + t[1] * u + n[1] * v];
+    const half = s => [q(L * .25, s * S * .55), q(L * .55, s * S * 1.02), q(L + tilt * s, s * S), q(L * .7, s * S * .55), q(L * .48, s * S * .12)];
+    const R = half(1), Lh = half(-1);
+    const d = `M${whlP(q(-3, -3))}C${whlP(Lh[0])} ${whlP(Lh[1])} ${whlP(Lh[2])}Q${whlP(Lh[3])} ${whlP(Lh[4])}L${whlP(q(L * .4, 0))}L${whlP(R[4])}Q${whlP(R[3])} ${whlP(R[2])}C${whlP(R[1])} ${whlP(R[0])} ${whlP(q(-3, 3))}Z`;
+    return { d: pa(d, fill, sw), q };
+  }
+  // Vây ngực dài: gốc (x, y), hướng ang (độ), dài L, rộng W; o.scal: mép sau răng lược như lông cánh
+  function whlFin(x, y, ang, L, W, o = {}) {
+    const a = ang * RAD, u = [Math.cos(a), Math.sin(a)], v = [-u[1], u[0]], sd = o.flip ? -1 : 1;
+    const q = (s, t) => [x + u[0] * s + v[0] * t * sd, y + u[1] * s + v[1] * t * sd];
+    const lead = [q(0, -W * .42), q(L * .28, -W * .62), q(L * .62, -W * .5), q(L * .9, -W * .22), q(L, 0)];
+    let trail;
+    if (o.scal) {
+      trail = []; const k = o.scal;
+      for (let j = k; j >= 1; j--) { const s = j / (k + 1); trail.push(q(L * (s + .5 / (k + 1)) * .98, W * (.1 + (1 - s) * .48) + W * .1), q(L * s, W * (.14 + (1 - s) * .4))); }
+      trail.push(q(0, W * .45));
+    } else trail = [q(L * .82, W * .2), q(L * .5, W * .46), q(L * .2, W * .5), q(0, W * .45)];
+    return { pts: lead.concat(trail), q };
+  }
+  const whlFinD = f => whlSmooth(f.pts, true);
+  // Cánh ánh sáng: lông bao tròn ở gốc + n lông cánh thon xòe quạt về mép sau. Gốc (x, y), hướng ang, dài L, rộng W, sd lật phía xòe
+  function whlWing(x, y, ang, L, W, n, c, sd = 1) {
+    const a = ang * RAD, u = [Math.cos(a), Math.sin(a)], v = [-u[1] * sd, u[0] * sd], q = (p, k) => [x + u[0] * p + v[0] * k, y + u[1] * p + v[1] * k];
+    let s = '', vein = '';
+    for (let j = n - 1; j >= 0; j--) {
+      const t = j / (n - 1), b = q(L * (.5 - .3 * t), W * (.02 + .22 * t)), fa = a + sd * (6 + 58 * t) * RAD, len = L * (.72 - .26 * t), w = W * (.17 - .02 * t);
+      const fu = [Math.cos(fa), Math.sin(fa)], fv = [-fu[1] * sd, fu[0] * sd], r = (p, k) => [b[0] + fu[0] * p + fv[0] * k, b[1] + fu[1] * p + fv[1] * k];
+      s += pa(`M${whlP(r(0, -w))}Q${whlP(r(len * .6, -w * 1.3))} ${whlP(r(len, 0))}Q${whlP(r(len * .55, w * 1.25))} ${whlP(r(0, w))}Z`, lin(c.w1, c.w2, c.w3), 3.2);
+      vein += `M${whlP(r(len * .3, 0))}L${whlP(r(len * .8, 0))}`;
+    }
+    s += ln(vein, '#ffffff', 1.4, 'opacity=".7"');
+    s += pa(whlSmooth([q(0, -W * .3), q(L * .28, -W * .5), q(L * .6, -W * .4), q(L * .8, -W * .16), q(L * .52, W * .04), q(L * .28, W * .24), q(L * .06, W * .36)], true), lin(c.w1, c.w2), 3.6);
+    s += ln(`M${whlP(q(4, -W * .25))}Q${whlP(q(L * .4, -W * .5))} ${whlP(q(L * .74, -W * .2))}`, '#ffffff', 2.2) + whlStar(...q(L * .3, -W * .12), 3.2, '#fffbe0') + whlStar(...q(L * .52, -W * .2), 2.4, '#ffffff');
+    return s;
+  }
+  // Viền sáng / mảng màu bám mép elip từ góc a1 tới a2, dày t
+  function whlArc(cx, cy, rx, ry, a1, a2, t, col, ex = '') {
+    const o = [], i = [];
+    for (let k = 0; k <= 10; k++) {
+      const u = k / 10, a = (a1 + (a2 - a1) * u) * RAD, tt = t * whlBell(u);
+      o.push([cx + (rx - .6) * Math.cos(a), cy + (ry - .6) * Math.sin(a)]);
+      i.push([cx + (rx - .6 - tt) * Math.cos(a), cy + (ry - .6 - tt) * Math.sin(a)]);
+    }
+    return `<path d="M${o.map(whlP).join('L')}L${i.reverse().map(whlP).join('L')}Z" fill="${col}" ${ex}/>`;
+  }
+  // Sao lấp lánh 4 cánh (không viền) và chấm sao
+  const whlStar = (x, y, r, col = '#fffbe0', cls = '', dl = 0) => spark4(x, y, r, col, 0, cls, dl);
+  const whlDot = (x, y, r, col = '#fff') => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="${col}"/>`;
+  const whlGlow = (x, y, r, col, op = .3) => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="${col}" opacity="${op}"/>`;
+  const whlRot = (x, y, a) => `transform="rotate(${f1(a)} ${f1(x)} ${f1(y)})"`;
+  // Chòm sao: nối các điểm bằng nét mảnh, mỗi đỉnh một sao
+  const whlConst = (pts, col, big = 3.2) => ln('M' + pts.map(whlP).join('L'), col, 1.3, 'opacity=".75"') + pts.map((p, i) => whlStar(p[0], p[1], i % 2 ? big * .7 : big, i % 2 ? '#ffffff' : col)).join('');
+  // Tinh vân: các mảng mờ cắt gắt dọc thân
+  const whlNeb = (T, L) => L.map(([t, vf, rx, ry, col, op]) => { const p = T.pt(t, vf); return el(p[0], p[1], rx, ry, col, 0, `opacity="${op}" ${whlRot(p[0], p[1], T.ang(t))}`); }).join('');
+  // Hành tinh nhỏ có vành
+  function whlPlanet(x, y, r, col, cold, ring, rot = -18, sw = 2.4) {
+    const ringD = (front) => `M${P(x - r * 1.8, y)} A${f1(r * 1.8)},${f1(r * .5)} 0 0 ${front ? 0 : 1} ${P(x + r * 1.8, y)}`;
+    return `<g ${whlRot(x, y, rot)}>` + ln(ringD(false), OL, sw + 2.4) + ln(ringD(false), ring, sw) + ci(x, y, r, cel(col, cold), sw) + ln(ringD(true), OL, sw + 2.4) + ln(ringD(true), ring, sw) + `</g>` + hl(x - r * .35, y - r * .4, r * .28, r * .16, -25, .7);
+  }
+  // Thiên hà xoắn ốc nhỏ nghiêng: lõi sáng + 2 nhánh cong
+  const whlGalaxy = (x, y, r, a) => `<g ${whlRot(x, y, a)}>` + el(x, y, r * 1.15, r * .5, '#ffd6fb', 0, 'opacity=".3"') +
+    ln(`M${P(x - r, y - r * .12)} Q${P(x - r * .25, y - r * .62)} ${P(x + r * .2, y - r * .12)} M${P(x + r, y + r * .12)} Q${P(x + r * .25, y + r * .62)} ${P(x - r * .2, y + r * .12)}`, '#ffffff', 1.8, 'opacity=".85"') + ci(x, y, r * .24, '#fffbe0', 0) + `</g>`;
+  // Sao băng: vệt thon + đầu sao
+  function whlShoot(x, y, L, ang, col, dl = 0) {
+    const a = ang * RAD, ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux;
+    const d = `M${P(x + nx * 2.4, y + ny * 2.4)}L${P(x - ux * L, y - uy * L)}L${P(x - nx * 2.4, y - ny * 2.4)}Z`;
+    return `<g class="twinkle" style="animation-delay:-${dl}s"><path d="${d}" fill="${col}" opacity=".55"/><path d="M${P(x + nx * 1.1, y + ny * 1.1)}L${P(x - ux * L * .6, y - uy * L * .6)}L${P(x - nx * 1.1, y - ny * 1.1)}Z" fill="#fff" opacity=".85"/>` + whlStar(x, y, 5.5, '#ffffff') + `</g>`;
+  }
+
+  /* ----- Mặt ----- */
+  // Mắt to tròn, tròng chuyển sắc tím → xanh lơ, đáy sáng, mi trên dày vểnh đuôi; o.glow: quầng sáng; o.star: sao trong đồng tử
+  function whlEye(cx, cy, rx, ry, sd, c, o = {}) {
+    let s = '';
+    if (o.glow) s += el(cx, cy, rx + 4.5, ry + 4.5, o.glow, 0, 'opacity=".38"');
+    s += el(cx, cy, rx, ry, lin(c.i1, c.i2, c.i3), 3.2);
+    const px = cx + sd * rx * .04, py = cy + ry * .06;
+    s += el(px, py, rx * .5, ry * .55, OL, 0);
+    if (o.star) s += whlStar(px, py + ry * .04, rx * .44, o.star);
+    s += el(px - rx * .34, py - ry * .36, rx * .3, ry * .27, '#fff', 0) + ci(px + rx * .3, py + ry * .38, rx * .13, '#fff', 0);
+    const top = cy - ry * 1.02;
+    s += ln(`M${P(cx - sd * rx * .78, cy - ry * .86)} Q${P(cx - sd * rx * .05, top - ry * .2)} ${P(cx + sd * rx * .72, top + ry * .12)} Q${P(cx + sd * rx * 1.08, top + ry * .26)} ${P(cx + sd * rx * 1.4, top - ry * .1)}`, OL, 3.6);
+    return s;
+  }
+  // Mặt: tâm giữa hai mắt (x, y), cỡ k; o.open: miệng há cười (dạng 1), không thì cười cong rộng; o.glow, o.star truyền cho mắt
+  function whlFace(x, y, k, c, o = {}) {
+    const g = 14 * k, rx = 9.2 * k, ry = 10.4 * k;
+    let s = el(x - g - 8 * k, y + 10 * k, 6 * k, 3.4 * k, c.cheek, 0, 'opacity=".6"') + el(x + g + 8 * k, y + 10 * k, 6 * k, 3.4 * k, c.cheek, 0, 'opacity=".6"');
+    s += whlEye(x - g, y, rx, ry, -1, c, o) + whlEye(x + g, y, rx, ry, 1, c, o);
+    if (o.open) s += pa(`M${P(x - 6 * k, y + 12 * k)} Q${P(x, y + 14 * k)} ${P(x + 6 * k, y + 12 * k)} Q${P(x + 5 * k, y + 21 * k)} ${P(x, y + 21 * k)} Q${P(x - 5 * k, y + 21 * k)} ${P(x - 6 * k, y + 12 * k)} Z`, c.mouth, 2.6) + el(x, y + 18.4 * k, 3.4 * k, 2 * k, c.tongue, 0);
+    else s += ln(`M${P(x - 15 * k, y + 11 * k)} Q${P(x - 13.5 * k, y + 14 * k)} ${P(x - 10 * k, y + 14 * k)} Q${P(x, y + 18 * k)} ${P(x + 10 * k, y + 14 * k)} Q${P(x + 13.5 * k, y + 14 * k)} ${P(x + 15 * k, y + 11 * k)}`, OL, 3);
+    return s;
+  }
+  // Tia phun sao từ lỗ thở (x, y), cao h
+  function whlSpout(x, y, h, c, big = 1) {
+    let s = ln(`M${P(x, y)} Q${P(x - 1, y - h * .6)} ${P(x, y - h)} M${P(x, y - h * .55)} Q${P(x - h * .2, y - h * .85)} ${P(x - h * .42, y - h * .78)} M${P(x, y - h * .55)} Q${P(x + h * .22, y - h * .88)} ${P(x + h * .44, y - h * .74)}`, OL, 7.5);
+    s += ln(`M${P(x, y)} Q${P(x - 1, y - h * .6)} ${P(x, y - h)} M${P(x, y - h * .55)} Q${P(x - h * .2, y - h * .85)} ${P(x - h * .42, y - h * .78)} M${P(x, y - h * .55)} Q${P(x + h * .22, y - h * .88)} ${P(x + h * .44, y - h * .74)}`, c.spray, 3.4);
+    s += spark4(x, y - h - 3 * big, 6.5 * big, '#fffbe0', 2) + spark4(x - h * .46, y - h * .8, 4.4 * big, c.groove, 1.8) + spark4(x + h * .48, y - h * .76, 4.6 * big, '#ffd6fb', 1.8);
+    return `<g class="float">${s}</g>`;
+  }
+
+  // Đầu cá voi: elip xoay theo trục thân (rot). whlHeadDeco: họng bạc có rãnh, mảng tinh vân, viền sáng
+  // Elip xoay dạng path ngược chiều kim đồng hồ (cùng chiều với whlOutline) để gộp với thân thành MỘT path: một khung bao → một dải màu liền
+  const whlEllD = (hx, hy, rx, ry, rot) => { const c = Math.cos(rot * RAD) * rx, s = Math.sin(rot * RAD) * rx, A = `A${f1(rx)},${f1(ry)} ${f1(rot)} 1 0 `; return `M${P(hx + c, hy + s)}${A}${P(hx - c, hy - s)}${A}${P(hx + c, hy + s)}Z`; };
+  const whlBodyD = (hx, hy, rx, ry, rot, T) => `<path d="${whlEllD(hx, hy, rx, ry, rot)}${whlOutline(T)}"/>`;
+  function whlHeadDeco(hx, hy, rx, ry, rot, c, o = {}) {
+    const arc = (k, a1, a2) => { const A = a => P(hx + rx * k * Math.cos(a * RAD), hy + ry * (k + .06) * Math.sin(a * RAD)); return `M${A(a1)} A${f1(rx * k)},${f1(ry * (k + .06))} 0 0 1 ${A(a2)}`; };
+    let s = `<g ${whlRot(hx, hy, rot)}>`;
+    if (o.neb) s += whlArc(hx, hy, rx, ry, -170, -20, ry * .55, o.neb, 'opacity=".32"');
+    s += whlArc(hx, hy, rx, ry, o.t1 ?? 8, o.t2 ?? 172, ry * (o.tk ?? .44), cel(c.l, c.ls));
+    s += ln(arc(.86, 40, 140) + arc(.74, 62, 118), c.groove, 2.2);
+    return s + whlArc(hx, hy, rx, ry, o.r1 ?? -120, o.r2 ?? 10, 3.6, c.rim) + `</g>`;
+  }
+  // Vẫy nhẹ quanh điểm (x, y) bằng hoạt ảnh .pt có sẵn
+  const whlWag = (s, x, y, dl = 0) => `<g class="pt" style="transform-box:view-box;transform-origin:${f1(x)}px ${f1(y)}px${dl ? `;animation-delay:-${dl}s` : ''}">${s}</g>`;
+
+  /* ===== Dạng 1: cá voi con tròn như giọt nước, mắt to, phun tia sao ===== */
+  function whlF1(c) {
+    const hx = 94, hy = 150, rx = 38, ry = 33, skin = cel(c.b, c.s);
+    let back = '', body = '', head = '', front = '';
+    // Đuôi nhỏ vểnh lên sau lưng
+    const T = whlTube([[110, 152], [134, 144], [148, 126], [151, 108]], [26, 16, 8, 4.5]);
+    back += whlWag(whlFluke(T, 14, 12, skin, 4.5).d + pa(whlOutline(T), skin, 5) + ln(whlLine(T, .3, .95, (u, w) => -w + 2), c.rim, 2, 'opacity=".9"'), 130, 148);
+    // Vây nhỏ + thân tròn
+    const fL = whlFin(64, 168, 150, 20, 13), fR = whlFin(122, 172, 40, 18, 12, { flip: true });
+    body += pa(whlFinD(fR), skin, 4.5) + el(hx, hy, rx, ry, skin, 5.5);
+    body += whlArc(hx, hy, rx, ry, 18, 162, 15, cel(c.l, c.ls)) + ln(`M${P(hx - 16, hy + 25)} Q${P(hx - 2, hy + 29)} ${P(hx + 14, hy + 25.5)} M${P(hx - 11, hy + 30)} Q${P(hx - 1, hy + 32.5)} ${P(hx + 9, hy + 30.5)}`, c.groove, 2, 'opacity=".9"');
+    body += whlArc(hx, hy, rx, ry, -80, 20, 3.4, c.rim) + hl(hx - 20, hy - 18, 9, 4.6);
+    body += whlDot(hx + 18, hy - 22, 1.6) + whlDot(hx + 26, hy - 12, 1.2) + whlDot(hx - 22, hy - 20, 1.3) + whlStar(hx + 22, hy - 18, 3.4, '#ffffff') + whlStar(hx - 13, hy - 25, 2.6, c.groove);
+    body += pa(whlFinD(fL), skin, 4.5) + ln(`M${whlP(fL.q(4, 0))} L${whlP(fL.q(15, 0))}`, c.s, 2);
+    // Mặt + dấu sao trán
+    head += whlGlow(hx - 2, hy - 20, 6, c.groove, .3) + whlStar(hx - 2, hy - 20, 5.2, c.groove) + whlFace(hx - 4, hy - 1, 1.08, c, { open: true });
+    front += whlSpout(hx + 2, hy - ry + 2, 24, c);
+    return {
+      back, body, head, front,
+      anc: { head: [hx - 2, hy - ry, 54], eyes: [hx - 4, hy - 1, 48], neck: [hx - 4, hy + 25, 50], back: [hx + 6, hy - 22, 50, 40], body: [hx - 4, hy + 26, 46, 26], halo: [hx - 2, hy - ry - 8, 26] }
+    };
+  }
+
+  /* ===== Dạng 2: cá voi non bơi ngang, vây dài, bụng có vạch sáng ===== */
+  function whlF2(c) {
+    const hx = 66, hy = 104, rx = 35, ry = 29, skin = cel(c.b, c.s);
+    let back = '', body = '', head = '', front = '';
+    const T = whlTube([[74, 110], [104, 122], [134, 121], [156, 106], [166, 84]], [27, 25, 18, 10, 5]);
+    const fl = whlFluke(T, 19, 17, skin, 5, 2);
+    back += pa(whlFinD(whlFin(100, 130, 52, 36, 13)), cel(c.s, c.d), 4.5);
+    back += whlWag(fl.d + ln(`M${whlP(fl.q(5, -5))} Q${whlP(fl.q(10, -12))} ${whlP(fl.q(15, -16))} M${whlP(fl.q(5, 5))} Q${whlP(fl.q(10, 12))} ${whlP(fl.q(15, 16))}`, c.rim, 2, 'opacity=".8"'), 150, 112);
+    body += bl(whlBodyD(hx, hy, rx, ry, -6, T), skin);
+    // Bụng bạc + vạch sáng
+    body += pa(whlBand(T, 0, .78, (u, w) => w - .8, (u, w) => w - .8 - w * .62 * whlBell(u, .5)), cel(c.l, c.ls), 0);
+    body += ln([.22, .4, .58].map(k => whlLine(T, .05, .7 - k * .4, (u, w) => w - w * k * whlBell(u * .5 + .25, .4))).join(''), c.groove, 2.4);
+    body += whlHeadDeco(hx, hy, rx, ry, -6, c, { t1: 25, t2: 150, tk: .45, r1: -110, r2: -10 });
+    // Lưng: viền sáng, tinh vân, chòm sao
+    body += ln(whlLine(T, .12, .95, (u, w) => -w + 2.2), c.rim, 2.6);
+    body += whlNeb(T, [[.3, -.45, 12, 6, c.neb1, .35], [.55, -.4, 9, 5, c.neb2, .4]]);
+    body += whlConst([T.pt(.2, -.55), T.pt(.34, -.72), T.pt(.47, -.45), T.pt(.62, -.6)], c.groove, 3.4) + whlDot(...T.pt(.75, -.5), 1.3) + whlDot(...T.pt(.4, -.2), 1.1);
+    body += whlDot(hx + 14, hy - 20, 1.4) + whlDot(hx - 18, hy - 16, 1.2) + hl(hx - 17, hy - 15, 8, 4);
+    head += whlGlow(hx - 4, hy - 18, 6, c.groove, .3) + whlStar(hx - 4, hy - 18, 5, c.groove) + whlFace(hx - 3, hy, .98, c, {});
+    // Vây gần dài, mép trước sáng
+    const fN = whlFin(84, 124, 48, 46, 17);
+    front += pa(whlFinD(fN), skin, 5) + pa(whlSmooth([fN.q(4, 3), fN.q(20, 5), fN.q(38, 2), fN.q(44, 0), fN.q(36, 6), fN.q(18, 7.5), fN.q(4, 6)], true), c.l, 0, 'opacity=".75"') +
+      ln(`M${whlP(fN.q(6, -3))} Q${whlP(fN.q(22, -5))} ${whlP(fN.q(40, -2))}`, c.rim, 2);
+    front += whlFx(`<g class="float">${whlStar(hx + 4, hy - ry - 10, 4.6, '#fffbe0')}${whlStar(hx + 14, hy - ry - 4, 3, c.groove)}</g>`);
+    return {
+      back, body, head, front,
+      anc: { head: [hx - 2, hy - ry, 50], eyes: [hx - 3, hy, 46], neck: [hx - 2, hy + 24, 48], back: [hx + 30, hy - 8, 48, 34], body: [hx + 22, hy + 20, 40, 26], halo: [hx - 2, hy - ry - 8, 23] }
+    };
+  }
+
+  /* ===== Dạng 3: cá voi trưởng thành vọt lên trời, vây dang như cánh, đuôi kéo vệt sao ===== */
+  function whlF3(c) {
+    const hx = 64, hy = 72, rx = 40, ry = 33, skin = cel(c.b, c.s);
+    let back = '', body = '', head = '', front = '';
+    const T = whlTube([[78, 88], [102, 112], [122, 134], [138, 152], [152, 164], [168, 168]], [31, 28, 22, 15, 9, 5]);
+    const fl = whlFluke(T, 19, 16, skin, 5, 3);
+    // Vệt sao đuôi để lại: một cung quẫy sáng + chuỗi sao nhỏ dần cuộn lên sau lưng
+    const trail = [[184, 152, 5.2], [194, 128, 4.4], [192, 104, 3.6], [180, 88, 3], [164, 86, 2.4], [156, 98, 1.8]];
+    back += whlFx(ln('M180,170 Q200,150 194,124 Q190,96 168,86 Q154,86 156,100', '#bff8ff', 6, 'opacity=".22"') + ln('M180,170 Q200,150 194,124 Q190,96 168,86 Q154,86 156,100', '#ffffff', 1.4, 'opacity=".55"') +
+      trail.map(([x, y, r], i) => whlStar(x, y, r, i % 2 ? '#ffd6fb' : '#fffbe0', 'twinkle', i * .3)).join('') + whlDot(198, 142, 1.4) + whlDot(176, 104, 1.2) + whlDot(186, 82, 1.4, '#bff8ff'));
+    // Cánh vây: xa chĩa lên phải (sau thân), gần chĩa xuống trái (trước thân)
+    const wing = (x, y, ang, flip) => {
+      const f = whlFin(x, y, ang, 62, 26, { scal: 4, flip });
+      return pa(whlFinD(f), cel(c.w, c.ws), 5) + ln(`M${whlP(f.q(6, -6))} Q${whlP(f.q(30, -12))} ${whlP(f.q(58, -2))}`, c.rim, 2.6) +
+        ln(`M${whlP(f.q(10, 2))} L${whlP(f.q(30, 8))} M${whlP(f.q(16, -2))} L${whlP(f.q(46, 4))}`, c.ws, 2.2) + whlStar(...f.q(38, -2), 3.2, '#fffbe0') + whlStar(...f.q(20, 4), 2.4, c.groove);
+    };
+    const wr = T.pt(.2, -.72), wl = T.pt(.24, .78);
+    back += whlWag(wing(wr[0], wr[1], -48, true), wr[0], wr[1], .7);
+    back += whlWag(fl.d + ln(`M${whlP(fl.q(5, -6))} Q${whlP(fl.q(10, -12))} ${whlP(fl.q(15, -17))} M${whlP(fl.q(5, 6))} Q${whlP(fl.q(10, 12))} ${whlP(fl.q(15, 17))}`, c.rim, 2, 'opacity=".8"'), 158, 164);
+    body += bl(whlBodyD(hx, hy, rx, ry, 40, T), skin);
+    // Bụng bạc phía dưới-trái + rãnh sáng
+    body += pa(whlBand(T, 0, .8, (u, w) => w - .8, (u, w) => w - .8 - w * .6 * whlBell(u, .45)), cel(c.l, c.ls), 0);
+    body += ln([.22, .4].map(k => whlLine(T, .02, .68, (u, w) => w - w * k * 1.3 * whlBell(u, .45))).join(''), c.groove, 2.3);
+    body += whlNeb(T, [[.25, -.45, 13, 7, c.neb1, .38], [.5, -.4, 10, 6, c.neb2, .4], [.75, -.3, 7, 4, c.neb1, .35]]);
+    body += whlHeadDeco(hx, hy, rx, ry, 40, c, { neb: c.neb2 });
+    body += ln(whlLine(T, .1, .94, (u, w) => -w + 2.2), c.rim, 2.6);
+    body += whlConst([T.pt(.18, -.6), T.pt(.34, -.72), T.pt(.46, -.42), T.pt(.62, -.6)], c.groove, 3.2) + whlDot(...T.pt(.72, -.5), 1.4) + whlDot(...T.pt(.28, -.2), 1.2) + hl(hx - 16, hy - 20, 8, 4, -45);
+    head += whlConst([[hx - 8, hy - 30], [hx + 6, hy - 27], [hx + 18, hy - 17]], c.groove, 3) + whlFace(hx - 6, hy - 2, 1, c, { star: '#bffcff' });
+    front += whlWag(wing(wl[0], wl[1], 150, false), wl[0], wl[1]);
+    return {
+      back, body, head, front,
+      anc: { head: [hx - 6, hy - 34, 52], eyes: [hx - 6, hy - 2, 48], neck: [hx - 4, hy + 24, 50], back: [hx + 14, hy + 10, 56, 56], body: [hx + 30, hy + 46, 40, 44], halo: [hx - 6, hy - 42, 25] }
+    };
+  }
+
+  /* ===== Dạng 4: Cá Voi Ngân Hà khổng lồ uốn hình trăng khuyết ôm hành tinh ===== */
+  function whlF4(c) {
+    const hx = 78, hy = 90, rx = 37, ry = 31, gal = lin(c.g1, c.g2, c.g3);
+    let back = '', body = '', head = '', front = '';
+    const T = whlTube([[90, 104], [100, 134], [122, 158], [148, 162], [167, 142], [173, 112], [169, 82]], [32, 30, 25, 19, 12, 7.5, 5]);
+    const fl = whlFluke(T, 24, 20, gal, 5, 4);
+    // Hào quang
+    back += whlFx(`<circle cx="118" cy="112" r="84" fill="${c.aura}" opacity=".15"/><circle cx="118" cy="112" r="66" fill="none" stroke="${c.groove}" stroke-width="2" stroke-dasharray="2 9" stroke-linecap="round" opacity=".55"/>`);
+    // Cánh ánh sáng trên (sau đầu)
+    back += whlWag(whlWing(62, 78, 232, 72, 40, 5, c, -1), 62, 78, .5);
+    // Hành tinh có vành được ôm trong vòng cung
+    back += whlPlanet(136, 112, 12, c.pl, c.pls, c.ring, -16, 2.8);
+    // Vây đuôi
+    back += whlWag(fl.d + ln(`M${whlP(fl.q(4, -6))} Q${whlP(fl.q(12, -16))} ${whlP(fl.q(19, -22))} M${whlP(fl.q(4, 6))} Q${whlP(fl.q(12, 16))} ${whlP(fl.q(19, 22))}`, '#ffffff', 2, 'opacity=".7"') +
+      whlStar(...fl.q(14, -12), 2.8, '#fffbe0') + whlStar(...fl.q(15, 13), 2.4, '#ffd6fb'), 170, 92);
+    // Thân trong suốt: nền thiên hà + tinh vân + dải ngân hà + hành tinh nhỏ
+    body += bl(whlBodyD(hx, hy, rx, ry, 44, T), gal);
+    body += whlNeb(T, [[.18, -.3, 16, 13, c.neb1, .5], [.4, -.35, 19, 11, c.neb2, .45], [.6, -.2, 15, 9, c.neb1, .45], [.8, -.15, 11, 7, c.neb2, .5], [.3, -.25, 9, 6, '#ffffff', .25], [.52, -.4, 8, 5, '#ffffff', .2]]);
+    body += pa(whlBand(T, .06, .97, (u, w) => -w * (.05 + .15 * u), (u, w) => -w * (.05 + .15 * u) - w * .5 * whlBell(u, .6)), '#f4ecff', 0, 'opacity=".3"');
+    body += ln(whlLine(T, .08, .95, (u, w) => -w * (.3 + .12 * u)), '#ffffff', 2, 'opacity=".6"');
+    body += [.12, .23, .31, .45, .63, .74, .85, .92].map((t, i) => whlDot(...T.pt(t, -.1 - (i * 37 % 7) / 9), .9 + (i % 3) * .5, i % 4 ? '#ffffff' : '#bffcff')).join('');
+    body += whlPlanet(...T.pt(.36, -.48), 6, '#ffd36a', '#e08a00', '#fff3c4', -20, 2) + whlPlanet(...T.pt(.68, -.5), 4.6, '#ff8fe6', '#b03ab8', '#ffd6fb', 15, 1.8);
+    body += whlConst([T.pt(.2, -.78), T.pt(.26, -.5), T.pt(.47, -.82), T.pt(.53, -.55)], c.groove, 3.2) + whlGalaxy(...T.pt(.56, -.2), 11, -20);
+    // Bụng bạc phía trong vòng cung + rãnh sáng
+    body += pa(whlBand(T, 0, .9, (u, w) => w - .8, (u, w) => w - .8 - w * .48 * whlBell(u, .45)), cel(c.l, c.ls), 0);
+    body += ln([.2, .36].map(k => whlLine(T, .03, .82, (u, w) => w - w * k * whlBell(u, .45) * 1.2)).join(''), c.groove, 2.2);
+    body += whlHeadDeco(hx, hy, rx, ry, 44, c, { neb: c.neb1 });
+    // Viền sáng lưng + vệt bóng kính
+    body += ln(whlLine(T, .1, .97, (u, w) => -w + 2.2), c.rim, 3) + ln(whlLine(T, .3, .62, (u, w) => -w + 7), '#ffffff', 2.4, 'opacity=".55"');
+    body += whlDot(hx + 18, hy - 22, 1.3) + whlDot(hx + 26, hy - 4, 1.1) + whlStar(hx + 22, hy - 12, 2.8, '#fffbe0') + whlStar(hx - 22, hy - 4, 2.2, '#ffffff') + hl(hx - 14, hy - 22, 8, 4, -60);
+    // Mặt + vương miện trăng khuyết (sừng hướng lên, ngọc sao giữa)
+    head += whlFace(hx - 4, hy - 2, 1.04, c, { glow: c.groove, star: '#ffffff' });
+    const cy = hy - 40;
+    head += pa(`M${P(hx - 21, cy - 6)} A21,21 0 0 0 ${P(hx + 21, cy - 6)} A28,28 0 0 1 ${P(hx - 21, cy - 6)} Z`, 'url(#gGold)', 3.5) + ln(`M${P(hx - 14, cy + 7)} Q${P(hx, cy + 12)} ${P(hx + 14, cy + 7)}`, '#fff6b0', 2, 'opacity=".8"');
+    head += pa(`M${P(hx, cy - 15)} L${P(hx + 6.5, cy - 3)} L${P(hx, cy + 6)} L${P(hx - 6.5, cy - 3)} Z`, cel('#e6fdff', '#4fc8f0'), 3) + ci(hx - 11, cy + 2, 2.6, '#ff8fe6', 1.6) + ci(hx + 11, cy + 2, 2.6, '#ff8fe6', 1.6) +
+      whlFx(whlStar(hx - 22, cy - 12, 4.4, '#ffffff', 'twinkle') + whlStar(hx + 22, cy - 12, 4.4, '#ffffff', 'twinkle', .6)) + whlStar(hx, cy - 22, 3, '#fffbe0');
+    // Cánh ánh sáng dưới (trước thân)
+    front += whlWag(whlWing(60, 118, 152, 64, 38, 5, c, 1), 60, 118);
+    // Sao băng, sao bay
+    front += whlFx(whlShoot(168, 24, 34, 160, c.groove, 0) + whlShoot(40, 182, 24, 200, '#ffd6fb', .9) + [[132, 48, 4], [192, 166, 3.4], [118, 132, 3.4], [150, 86, 3]].map(([x, y, r], i) => whlStar(x, y, r, i % 2 ? '#ffd6fb' : '#fffbe0', 'twinkle', i * .45)).join(''));
+    return {
+      back, body, head, front,
+      anc: { head: [hx - 4, cy + 6, 52], eyes: [hx - 4, hy - 2, 50], neck: [hx - 2, hy + 27, 52], back: [hx + 8, hy + 4, 56, 62], body: [hx + 24, hy + 56, 42, 40], halo: [hx - 4, cy - 26, 25] }
+    };
+  }
+
+  PET_SPECS.ep_whale = {
+    el: 'shadow',
+    c: {
+      b: '#9a88ff', s: '#5d48d8', d: '#3a2a9e', l: '#f4f1ff', ls: '#c6bbff', w: '#b9a8ff', ws: '#6d56e0',
+      neb1: '#ff6ae6', neb2: '#4ff0ff', groove: '#8ff7ff', rim: '#b4f9ff', spray: '#bff8ff',
+      i1: '#2a1c8c', i2: '#4f8dff', i3: '#a8fcff', cheek: '#ff8fd6', mouth: '#c2286e', tongue: '#ff8fb8'
+    },
+    c4: {
+      b: '#7a6cff', s: '#3d2db8', g1: '#7590ff', g2: '#5a3ae0', g3: '#3c20a8', l: '#eef0ff', ls: '#b3b4f2',
+      w1: '#e6fbff', w2: '#8fd8ff', w3: '#9a6cff', aura: '#8a6cff', rim: '#8ff7ff', i3: '#d8ffff', pl: '#ffd36a', pls: '#e0862a', ring: '#fff3c4'
+    },
+    draw(f, g, c) { return [null, whlF1, whlF2, whlF3, whlF4][f](c); }
+  };
+})();
+
+/* ===================== SỬ THI: Ngựa Sắt Thánh Gióng (ep_ironhorse, hệ Thép) ===================== */
+// Ngựa con sắt tròn trịa → ngựa non bờm lá sắt → chiến mã bờm lửa phi nước đại → thần mã chồm phun lửa, tre ngà rực lửa.
+// Cần: gfx.js (pa, el, ci, ln, hl, bl, P, f1, cel, flame, eye, capsule, rivet, OL) và pets.js (PET_SPECS, PET_LITE).
+// Đặt sau pets.js (IIFE chạy ngay). Hàm phụ nằm trong IIFE, tiền tố ihs, không thêm tên toàn cục.
+// draw(f, g, c) giữ chữ ký chung; g bị bỏ qua vì mỗi dạng có hình học riêng. Vị trí đầu trả qua anc.halo = [x, y, rx].
+(() => {
+  const R = Math.PI / 180, GOLD = 'url(#gGold)', CORE = '#fff59a';
+  const BR = '#e0913f', BRS = '#9c521c', RED = '#d6283a', REDS = '#8a1230';
+  // Đổi mọi cặp "u,v" trong path cục bộ sang tọa độ thật (chỉ dùng lệnh tuyệt đối M L Q C Z); u < 0 nhân thêm L (độ dài mõm)
+  const ihsM = (d, x, y, k, L = 1) => d.replace(/(-?[\d.]+),(-?[\d.]+)/g, (_, a, b) => P(x + a * (a < 0 ? L : 1) * k, y + b * k));
+  const ihsE = (cx, cy, rx, ry, a = 0) => `<ellipse cx="${f1(cx)}" cy="${f1(cy)}" rx="${f1(rx)}" ry="${f1(ry)}"${a ? ` transform="rotate(${f1(a)} ${f1(cx)} ${f1(cy)})"` : ''}/>`;
+  const Pi = (x, y) => Math.round(x) + ',' + Math.round(y); // tọa độ nguyên cho lửa, tre, trống (đỡ nặng chuỗi)
+  const ihsCirc = (cx, cy, r) => `M${P(cx - r, cy)}a${f1(r)},${f1(r)} 0 1 0 ${f1(2 * r)},0a${f1(r)},${f1(r)} 0 1 0 ${f1(-2 * r)},0`;
+  const ihsG = (s, cls, x, y, dl = 0) => `<g class="${cls}" style="transform-box:view-box;transform-origin:${f1(x)}px ${f1(y)}px${dl ? `;animation-delay:-${dl}s` : ''}">${s}</g>`;
+
+  /* ----- Hoa văn trống đồng Đông Sơn ----- */
+  // Mặt trời giữa trống: n tia nhọn từ r0 ra r1
+  function ihsSun(cx, cy, r0, r1, n, fill, sw = 2, a0 = -90) {
+    let d = '';
+    for (let i = 0; i < n; i++) {
+      const a = (a0 + i * 360 / n) * R, w = 180 / n * R * .62;
+      d += `M${P(cx + r0 * Math.cos(a - w), cy + r0 * Math.sin(a - w))}L${P(cx + r1 * Math.cos(a), cy + r1 * Math.sin(a))}L${P(cx + r0 * Math.cos(a + w), cy + r0 * Math.sin(a + w))}Z`;
+    }
+    return pa(d + ihsCirc(cx, cy, r0 * 1.05), fill, sw);
+  }
+  // Vòng tròn có chấm nối tiếp tuyến, xếp theo đoạn thẳng
+  function ihsTanRow(x0, y0, x1, y1, n, r, col, w = 1.8) {
+    let d = '', dots = '';
+    const ux = (x1 - x0) / (n - 1), uy = (y1 - y0) / (n - 1), L = Math.hypot(ux, uy), nx = -uy / L * r, ny = ux / L * r;
+    for (let i = 0; i < n; i++) {
+      const x = x0 + ux * i, y = y0 + uy * i;
+      d += ihsCirc(x, y, r); dots += ihsCirc(x, y, r * .32);
+      if (i < n - 1) d += `M${P(x + nx, y + ny)}L${P(x + ux - nx, y + uy - ny)}`;
+    }
+    return ln(d, col, w) + `<path d="${dots}" fill="${col}"/>`;
+  }
+
+  /* ----- Bộ phận ----- */
+  // Chân ngựa theo khớp: khối gộp viền, móng đồng ở cuối
+  function ihsLeg(pts, w, fill, o = {}) {
+    let sh = '';
+    for (let i = 0; i < pts.length - 1; i++) sh += `<path d="${capsule(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w * (i ? 1 : (o.top || 1.3)), w)}"/>`;
+    const [a, b] = pts.slice(-2), ang = Math.atan2(b[1] - a[1], b[0] - a[0]) / R - 90, hw = w * 1.08;
+    let s = bl(sh, fill, 4.5);
+    const hoof = pa(`M${P(-hw, -w * .7)} L${P(hw, -w * .7)} L${P(hw * 1.18, w * .62)} Q0,${f1(w * .8)} ${P(-hw * 1.18, w * .62)} Z`, o.hoof || cel(BR, BRS), 3.5) +
+      (o.band ? ln(`M${P(-hw * 1.02, -w * .2)} L${P(hw * 1.02, -w * .2)}`, o.band, 2.4) : '');
+    s += `<g transform="translate(${f1(b[0])} ${f1(b[1])}) rotate(${f1(ang)})">${hoof}</g>`;
+    if (o.rivet) s += o.rivet.map(i => rivet(pts[i][0], pts[i][1], 2)).join('');
+    return s;
+  }
+  // Lá sắt: gốc (x, y), dài L, rộng W, góc a (độ)
+  function ihsPlate(x, y, L, W, a, fill, edge, sw = 3.5) {
+    const c = Math.cos(a * R), s = Math.sin(a * R), nx = -s * W, ny = c * W, tx = x + c * L, ty = y + s * L;
+    return pa(`M${P(x + nx * .5, y + ny * .5)} Q${P(x + c * L * .45 + nx, y + s * L * .45 + ny)} ${P(tx, ty)} Q${P(x + c * L * .5 - nx * .8, y + s * L * .5 - ny * .8)} ${P(x - nx * .5, y - ny * .5)} Z`, fill, sw) +
+      (edge ? ln(`M${P(x + c * L * .25 + nx * .3, y + s * L * .25 + ny * .3)} Q${P(x + c * L * .5 + nx * .5, y + s * L * .5 + ny * .5)} ${P(x + c * L * .88, y + s * L * .88)}`, edge, 2) : '');
+  }
+  // Lưỡi lửa chĩa theo góc a (độ; -90 = lên), gốc (x, y), cao h, rộng w, cong t
+  const ihsTongue = (x, y, h, w, a, t = 0, core = true, sw = 3.5) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(a + 90)})">` + flame(0, 0, h, w, t, core, sw) + `</g>`;
+  // Khói phì từ mũi
+  const ihsPuff = (x, y, r, dl) => `<g class="smoke" style="animation-delay:-${dl}s">` + bl(`<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}"/><circle cx="${f1(x - r * .8)}" cy="${f1(y + r * .3)}" r="${f1(r * .7)}"/><circle cx="${f1(x + r * .6)}" cy="${f1(y + r * .45)}" r="${f1(r * .62)}"/>`, '#e9e5fa', 2.6) + ci(x - r * .25, y - r * .3, r * .28, '#fff', 0) + `</g>`;
+  // Lửa phun dài (chĩa sang trái), gốc tại khóe miệng; a > 0 hất lên
+  function ihsBreath(x, y, k, a) {
+    const L = (d, fill, sw) => pa(ihsM(d, 0, 0, k), fill, sw);
+    return `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(a)})"><g class="flame">` +
+      L('M0,0 C-8,-5 -18,-10 -30,-13 C-34,-21 -44,-22 -46,-15 C-54,-17 -60,-9 -55,-3 C-62,2 -58,11 -50,10 C-49,17 -39,19 -35,12 C-22,11 -9,5 0,0 Z', '#ff4a1a', 3.5) +
+      L('M-4,0 C-12,-4 -21,-7 -32,-8 C-37,-13 -44,-11 -44,-7 C-50,-7 -52,-1 -48,2 C-50,7 -44,9 -40,6 C-28,6 -14,3 -4,0 Z', '#ffb21f', 0) +
+      L('M-10,0 C-17,-2 -25,-3 -34,-3 C-38,-4 -40,0 -37,1.5 C-30,2.5 -18,1.5 -10,0 Z', CORE, 0) + `</g></g>`;
+  }
+  // Ngọn lửa liền khối mọc dọc xương sống B (bờm, đuôi): n lưỡi cong, cao h0 → h1 (+ bump ở giữa), ngả về sau lean độ; side = -1 lật phía
+  function ihsFire(B, n, h0, h1, lean = 30, side = 1, sw = 4, bump = 0) {
+    const pt = t => { const [x, y] = ihsBz(B, t), a = ihsBzA(B, t) * R, tx = Math.cos(a), ty = Math.sin(a); return { x, y, tx, ty, nx: ty * side, ny: -tx * side }; };
+    const off = Math.tan(lean * R);
+    const lay = (k, ins, fill, w) => {
+      let d = '';
+      for (let i = 0; i < n; i++) {
+        const a = pt(i / n), b = pt((i + 1) / n), tm = (i + .5) / n, q = pt(tm), bw = Math.hypot(b.x - a.x, b.y - a.y);
+        const h = (h0 + (h1 - h0) * tm + bump * Math.sin(tm * Math.PI)) * k * (i % 2 ? .82 : 1), o = h * off;
+        const F = (u, v) => Pi(a.x + q.tx * u + q.nx * v, a.y + q.ty * u + q.ny * v), u0 = bw * ins, u1 = bw * (1 - ins);
+        d += `${i ? 'L' : 'M'}${F(u0, 0)}C${F(u0 - bw * .45, h * .55)} ${F(bw * .1 + o * .55, h * .86)} ${F(bw * .4 + o, h)}C${F(bw * .62 + o * .4, h * .55)} ${F(u1 + bw * .35, h * .5)} ${F(u1, 0)}`;
+      }
+      return pa(d + 'Z', fill, w);
+    };
+    return lay(1, 0, '#ff5a1f', sw) + lay(.7, .12, '#ffa21f', 0) + `<g class="flick">` + lay(.4, .26, CORE, 0) + `</g>`;
+  }
+  // Tre ngà: thân vàng ngà sọc xanh, đốt phình, ngọn vát nhọn; lá và lửa liếm bên thân
+  function ihsBamboo(x0, y0, x1, y1, w, n, fire, leaves = []) {
+    const L = Math.hypot(x1 - x0, y1 - y0), ux = (x1 - x0) / L, uy = (y1 - y0) / L, nx = -uy * w / 2, ny = ux * w / 2;
+    const at = t => [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
+    let s = pa(`M${Pi(x0 - nx, y0 - ny)}L${Pi(x1 - nx, y1 - ny)}L${Pi(x1 + nx + ux * w * 1.6, y1 + ny + uy * w * 1.6)}L${Pi(x0 + nx, y0 + ny)}Z`, cel('#ffe27a', '#e0aa2e', .55), 3.5);
+    s += pa(`M${Pi(x1 - nx, y1 - ny)}L${Pi(x1 + nx + ux * w * 1.6, y1 + ny + uy * w * 1.6)}L${Pi(x1 + ux * w * .4, y1 + uy * w * .4)}Z`, '#fff6d0', 2);
+    s += ln(`M${Pi(x0 + nx * .5, y0 + ny * .5)}L${Pi(x1 + nx * .5, y1 + ny * .5)}`, '#8fc23a', 1.6) + ln(`M${Pi(x0 - nx * .45, y0 - ny * .45)}L${Pi(x1 - nx * .45, y1 - ny * .45)}`, '#fffbe0', w * .2);
+    let nodes = '';
+    for (let i = 1; i <= n; i++) { const [x, y] = at(i / (n + .5)); nodes += `M${Pi(x - nx * 1.2, y - ny * 1.2)}L${Pi(x + nx * 1.2, y + ny * 1.2)}`; }
+    s += ln(nodes, OL, 6.5) + ln(nodes, '#d29a24', 2.6);
+    // chùm lá tre: [t, góc, dài]
+    s += leaves.map(([t, a, l]) => { const [x, y] = at(t); return pa([-28, 0, 26].map(da => { const c = Math.cos((a + da) * R), si = Math.sin((a + da) * R), ll = l * (da ? .78 : 1); return `M${Pi(x, y)}Q${Pi(x + c * ll * .45 - si * ll * .3, y + si * ll * .45 + c * ll * .3)} ${Pi(x + c * ll, y + si * ll)}Q${Pi(x + c * ll * .45 + si * ll * .14, y + si * ll * .45 - c * ll * .14)} ${Pi(x, y)}Z`; }).join(''), cel('#d4ec5a', '#86b82e'), 2.4); }).join('');
+    if (fire) { const [x, y] = at(fire[0]); s += `<g class="flame">` + ihsTongue(x + fire[2] * nx * 1.2, y + fire[2] * ny * 1.2, fire[1], fire[1] * .58, -90 + fire[2] * 14, -fire[2] * 3, true, 3) + `</g>`; }
+    return s;
+  }
+  // Mặt trống đồng làm hào quang sau lưng dạng 4: vành răng cưa, vòng tròn tiếp tuyến, vạch song song (tâm bị thân che nên bỏ mặt trời)
+  function ihsDrum(cx, cy, r) {
+    if (PET_LITE) return '';
+    const g = '#ffc23a', C = (rr) => `M${Pi(cx - rr, cy)}a${Math.round(rr)},${Math.round(rr)} 0 1 0 ${Math.round(2 * rr)},0a${Math.round(rr)},${Math.round(rr)} 0 1 0 ${-Math.round(2 * rr)},0`;
+    let zig = '', comb = '', tan = '', dots = '';
+    for (let i = 0; i <= 56; i++) { const a = i * 180 / 28 * R, rr = r * (i % 2 ? .97 : .9); zig += (i ? 'L' : 'M') + Pi(cx + rr * Math.cos(a), cy + rr * Math.sin(a)); }
+    for (let i = 0; i < 48; i++) { const a = i * 7.5 * R; comb += `M${Pi(cx + r * .57 * Math.cos(a), cy + r * .57 * Math.sin(a))}L${Pi(cx + r * .63 * Math.cos(a), cy + r * .63 * Math.sin(a))}`; }
+    for (let i = 0; i < 16; i++) {
+      const a = i * 22.5 * R, b = a + 22.5 * R, rr = r * .76, cr = r * .065, x = cx + rr * Math.cos(a), y = cy + rr * Math.sin(a);
+      tan += `M${Pi(x - cr, y)}a${f1(cr)},${f1(cr)} 0 1 0 ${f1(2 * cr)},0a${f1(cr)},${f1(cr)} 0 1 0 ${f1(-2 * cr)},0M${Pi(x + cr * Math.cos(a), y + cr * Math.sin(a))}L${Pi(cx + (rr - cr) * Math.cos(b), cy + (rr - cr) * Math.sin(b))}`;
+      dots += `M${Pi(x, y)}h.1`;
+    }
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#ff7a1f" opacity=".2"/><circle cx="${cx}" cy="${cy}" r="${r * .7}" fill="#ffc23a" opacity=".14"/><g opacity=".7"><g class="spin" style="transform-origin:${cx}px ${cy}px;animation-duration:60s">` +
+      ln(C(r) + C(r * .88) + C(r * .66) + C(r * .54) + zig + comb, g, 2.2) + ln(tan, g, 2.2) + ln(dots, g, 4.4) + `</g></g>`;
+  }
+  /* ----- Đầu ngựa 3/4 nhìn sang trái: (x, y) = tâm sọ, k = tỷ lệ, L = độ dài mõm ----- */
+  function ihsHead(x, y, k, f, c, o = {}) {
+    const L = o.L ?? 1, M = d => ihsM(d, x, y, k, L), X = u => x + u * (u < 0 ? L : 1) * k, Y = v => y + v * k;
+    const Er = o.ear ?? 1, ME = d => M(d.replace(/(-?[\d.]+),(-?[\d.]+)/g, (_, a, b) => a + ',' + f1(+b < -14 ? -14 + (+b + 14) * Er : +b)));
+    let back = '', s = '';
+    back += pa(ME('M-12,-15 Q-17,-27 -12,-35 Q-5,-26 -1,-18 Z'), cel(c.s, c.d), 4.5);
+    const face = o.open
+      ? 'M-6,-19 C-18,-16 -27,-6 -33,4 C-37,10 -38,14 -36,17 L-15,20 L-29,26 C-27,30 -23,32 -17,32 C-9,32 -4,29 2,27 C12,26 21,18 22,6 C22,0 20,-6 16,-10 Z'
+      : 'M-6,-19 C-18,-16 -27,-6 -33,4 C-37,11 -38,17 -35,21 C-33,25 -29,26 -26,25 C-27,28 -24,31 -18,31 C-10,31 -4,28 2,26 C12,26 21,18 22,6 C22,0 20,-6 16,-10 Z';
+    s += bl(`<path d="${ME('M2,-15 Q4,-28 11,-36 Q18,-24 15,-11 Z')}"/>` + ihsE(x, y, 22 * k, 20 * k) + `<path d="${M(face)}"/>`, cel(c.b, c.s), 5.2);
+    s += pa(ME('M5,-16 Q7,-25 11,-30 Q14,-22 12,-14 Z'), cel(BR, BRS), 0, 'opacity=".75"');
+    if (o.open) s += pa(M('M-36,17 L-15,20 L-29,26 Z'), '#5a0f22', 3) + ln(M('M-34,18.5 L-25,19.5'), '#fff', 1.6);
+    else s += ln(M('M-33,25 Q-30,26.5 -26,25'), OL, 2.4);
+    // lỗ mũi gần + xa
+    const nx = X(-29), ny = Y(o.open ? 7 : 11), hot = f >= 3 ? '#ff6a1a' : OL;
+    s += `<ellipse cx="${f1(nx)}" cy="${f1(ny)}" rx="${f1(3.4 * k)}" ry="${f1(2.1 * k)}" transform="rotate(-55 ${f1(nx)} ${f1(ny)})" fill="${hot}" stroke="${OL}" stroke-width="2"/>` + el(X(-35.5), Y(o.open ? 9 : 13), 1.2 * k, 2 * k, OL, 0);
+    // gò má + ánh đồng viền hàm
+    s += ln(M('M15,2 Q13,15 3,21'), c.s, 2.6, 'opacity=".85"') + ln(M('M-4,28 C4,27 11,22 16,15'), BR, 2.2, 'opacity=".9"');
+    // mắt: gần to, xa nhỏ (nằm sát sống mũi)
+    const er = [0, 9, 7.8, 7.4, 7.4][f] * k;
+    const eo = f === 1 ? { iris: c.i, lid: 0, brow: false, pr: er * .6 } : { iris: c.i, lid: [0, 0, .5, .8, .92][f], skin: c.b, pr: er * .5, bw: 4.6 * k, ew: 3.5 };
+    s += eye(X(-20), Y(-3.5), er * .62, er * .98, -1, eo) + eye(X(6), Y(-4), er, er * 1.12, 1, eo);
+    if (f <= 2) s += el(X(12), Y(9), 5 * k, 3 * k, '#ff7a5c', 0, 'opacity=".5"');
+    s += hl(X(-3), Y(-14), 7.5 * k, 3 * k, -20, .55);
+    return { back, head: s, nose: [X(-37), Y(o.open ? 9 : 13)], mouth: [X(-16), Y(20)], X, Y, M, k };
+  }
+  // Bờm trán: ba lá cong rủ từ giữa hai tai xuống trán
+  function ihsForelock(H, fill, edge) {
+    return pa(H.M('M6,-22 C0,-24 -7,-21 -10,-12 C-6,-15 -3,-15 -1,-13 C-1,-17 2,-19 5,-17 C5,-20 8,-21 11,-19 C10,-22 8,-23 6,-22 Z'), fill, 3) + (edge ? ln(H.M('M3,-20 C-2,-19 -6,-16 -8,-13'), edge, 1.8) : '');
+  }
+  // Giáp mặt (chanfron) dọc sống mũi + đĩa trán hoa văn mặt trời
+  function ihsChanfron(H, fill, big) {
+    return pa(H.M('M-1,-19 C-6,-18 -10,-14 -12,-9 L-25,4 C-27,7 -24,10 -22,8 L-8,-4 C-5,-8 -1,-11 3,-12 Z'), fill, 3) + ln(H.M('M-4,-15 C-7,-13 -9,-10 -10,-7 L-22,5'), big ? '#fff6b0' : '#ffc888', 1.6) +
+      ci(H.X(-3), H.Y(-15), (big ? 6.4 : 5) * H.k, big ? cel('#ffd21f', '#d99500') : GOLD, 2.6) + ihsSun(H.X(-3), H.Y(-15), (big ? 1.9 : 1.5) * H.k, (big ? 5 : 3.9) * H.k, 10, big ? '#d6283a' : '#b8641e', 0);
+  }
+  // Ánh bóng kim loại: vệt sáng dài + chấm sáng gắt
+  const ihsGloss = (x, y, rx, ry, a, col, op = .42) => `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(rx)}" ry="${f1(ry)}" fill="${col}" opacity="${op}" transform="rotate(${a} ${f1(x)} ${f1(y)})"/>` + hl(x - rx * .45 * Math.cos(a * R), y - rx * .45 * Math.sin(a * R), rx * .32, ry * .55, a, .6);
+  // Điểm trên đường Bézier bậc 3 + góc tiếp tuyến (độ)
+  const ihsBz = (B, t) => { const u = 1 - t; return [0, 1].map(i => u * u * u * B[0][i] + 3 * u * u * t * B[1][i] + 3 * u * t * t * B[2][i] + t * t * t * B[3][i]); };
+  const ihsBzA = (B, t) => { const a = ihsBz(B, Math.max(0, t - .02)), b = ihsBz(B, Math.min(1, t + .02)); return Math.atan2(b[1] - a[1], b[0] - a[0]) / R; };
+
+  // Neo trang phục + vị trí đầu cho hào quang, tính từ hình học đầu (hx, hy, k, L) của dạng
+  const ihsAnc = (hx, hy, k, L, neck, back, body) => ({
+    head: [hx + 1, hy - 23 * k, 40], eyes: [hx + k * (6 - 20 * L) / 2, hy - 3.8 * k, 42], neck, back, body, halo: [hx + 2, hy - 33 * k, 18]
+  });
+
+  /* ----- 4 dạng ----- */
+  const DR = {
+    1(c) { // Ngựa con sắt tròn trịa: khớp đinh tán, mắt to tròn, phì khói
+      let back = '', body = '', head = '', front = '';
+      const coat = cel(c.b, c.s), far = cel(c.s, c.d), farHoof = cel(BRS, '#6e3a14'), mane = cel(c.l, c.s);
+      back += ihsG([-62, -32, -4].map((a, i) => ihsPlate(152, 146, 17 - i * 2, 6.5, a, mane, BR, 3.5)).join('') + ci(152, 146, 4, GOLD, 2.2), 'pt', 152, 146);
+      body += ihsLeg([[104, 162], [102, 182]], 5.8, far, { hoof: farHoof }) + ihsLeg([[138, 162], [139, 182]], 5.8, far, { hoof: farHoof });
+      body += bl(ihsE(126, 152, 27, 19) + `<path d="${capsule(110, 146, 98, 120, 14, 12)}"/>`, coat);
+      body += ihsGloss(122, 141, 15, 4, -8, c.l) + ln('M102,163 Q126,175 151,161', BR, 2.8, 'opacity=".9"');
+      body += ln('M129,134 Q134,152 129,170', BR, 3) + [139, 152, 165].map((y, i) => rivet(130.5 + (i === 1 ? 2.2 : 1), y, 2)).join('');
+      body += ihsLeg([[112, 164], [110, 183]], 6.5, coat, { band: GOLD, rivet: [0] }) + ihsLeg([[146, 162], [148, 183]], 6.5, coat, { band: GOLD, rivet: [0] });
+      // bờm vảy sắt sau gáy
+      back += [[119, 124, 6.5], [117, 111, 7.5], [113, 98, 8], [106, 86, 8.5]].map(([x, y, r]) => el(x, y, r * 1.05, r * .9, cel(c.p, c.ps), 3.5) + ln(`M${x - r * .6},${y + r * .3} Q${x},${y + r * .75} ${x + r * .6},${y + r * .3}`, BR, 1.8)).join('');
+      const k = 1.25, hx = 80, hy = 97, H = ihsHead(hx, hy, k, 1, c, { L: .72, ear: .8 });
+      back += H.back; head += H.head + ihsForelock(H, mane, BR);
+      // vòng cổ đồng + mặt trống nhỏ
+      head += pa('M92,126 Q103,136 116,130 L117,137 Q103,144 90,133 Z', cel(BR, BRS), 3) + ci(104, 141, 6.2, GOLD, 2.6) + ihsSun(104, 141, 1.8, 4.6, 8, '#b8641e', 0);
+      if (!PET_LITE) front += ihsPuff(H.nose[0] - 6, H.nose[1] - 7, 4.2, .4) + ihsPuff(H.nose[0] - 11, H.nose[1] - 19, 5.4, 1.1) + ihsPuff(H.nose[0] - 6, H.nose[1] - 32, 3.6, 1.7);
+      return { back, body, head, front, anc: ihsAnc(hx, hy, k, .72, [104, 134, 30], [124, 128, 48, 36], [106, 150, 24, 24]) };
+    },
+    2(c) { // Ngựa non sắt đứng vững: chân dài, bờm lá sắt, móng đồng
+      let back = '', body = '', head = '', front = '';
+      const coat = cel(c.b, c.s), far = cel(c.s, c.d), farHoof = cel(BRS, '#6e3a14'), mane = cel(c.p, c.ps);
+      back += ihsG([34, 58, 82].map((a, i) => ihsPlate(158, 126, 36 - i * 5, 9, a, mane, BR, 3.5)).join(''), 'pt', 158, 126);
+      body += ihsLeg([[112, 148], [114, 166], [111, 183]], 6, far, { hoof: farHoof }) + ihsLeg([[140, 144], [145, 164], [138, 183]], 6, far, { hoof: farHoof });
+      body += bl(ihsE(128, 134, 33, 19, -3) + '<path d="M78,52 C100,56 116,84 132,114 L104,150 C96,132 90,114 76,98 Z"/>', coat);
+      body += ihsGloss(124, 124, 20, 4.5, -4, c.l) + ihsGloss(100, 84, 14, 4, 52, c.l) + ln('M100,151 Q128,160 158,146', BR, 3, 'opacity=".9"') + ln(ihsCirc(148, 132, 6.5) + ihsCirc(148, 132, 3), BR, 2);
+      body += ihsLeg([[101, 146], [98, 165], [99, 183]], 6.6, coat, { band: GOLD }) + ihsLeg([[150, 142], [158, 162], [151, 183]], 6.6, coat, { band: GOLD });
+      body += ci(98, 165, 3.6, cel(BR, BRS), 2.2) + ci(158, 162, 3.6, cel(BR, BRS), 2.2);
+      // dây ngực đồng + đĩa trống
+      body += pa('M88,118 Q100,134 120,134 L120,141 Q97,143 84,124 Z', cel(BR, BRS), 3) + ci(100, 138, 7.5, GOLD, 3) + ihsSun(100, 138, 2.2, 5.6, 8, '#b8641e', 0);
+      // bờm lá sắt dọc gáy
+      const CR = [[78, 52], [100, 56], [116, 84], [132, 114]];
+      for (let i = 5; i >= 0; i--) { const t = .08 + i * .15, [x, y] = ihsBz(CR, t); back += ihsPlate(x - 2, y + 2, 27 - i * 1.6, 10, ihsBzA(CR, t) - 62, mane, BR, 3.5); }
+      const k = 1.18, hx = 64, hy = 70, H = ihsHead(hx, hy, k, 2, c, { L: .92 });
+      back += H.back; head += H.head;
+      head += pa(H.M('M-7,-11 C-12,-6 -18,0 -24,6 L-21,9 C-15,3 -9,-3 -3,-8 Z'), cel(BR, BRS), 2.4) + ihsForelock(H, mane, BR);
+      if (!PET_LITE) front += ihsG(ci(H.nose[0] - 6, H.nose[1] - 4, 2.2, '#ffb21f', 1.4) + ci(H.nose[0] - 10, H.nose[1] - 11, 1.6, '#ff6a1a', 1.2), 'ember', H.nose[0], H.nose[1], .6) + ihsPuff(H.nose[0] - 9, H.nose[1] - 16, 4, 1.2);
+      return { back, body, head, front, anc: ihsAnc(hx, hy, k, .92, [96, 124, 34], [126, 110, 56, 40], [100, 132, 28, 28]) };
+    },
+    3(c) { // Chiến mã sắt phi nước đại: bờm lửa, yên khắc trống đồng, móng tóe lửa
+      let back = '', body = '', head = '', front = '';
+      const coat = cel(c.b, c.s), far = cel(c.s, c.d), farHoof = cel(BRS, '#6e3a14');
+      const k = 1.16, hx = 56, hy = 52, H = ihsHead(hx, hy, k, 3, c, { L: 1 });
+      const TB = [[160, 106], [174, 104], [186, 98], [196, 84]];
+      back += ihsG(ihsFire(TB, 4, 22, 14, 55, 1, 3.5) + ihsFire(TB, 4, 18, 10, 55, -1, 3.5), 'pt', 160, 106);
+      body += ihsLeg([[96, 126], [86, 146], [100, 158]], 6, far, { hoof: farHoof }) + ihsLeg([[156, 118], [172, 140], [188, 150]], 6, far, { hoof: farHoof });
+      back += ihsFire([[H.X(-2), H.Y(-21)], [82, 26], [104, 66], [122, 98]], 6, 24, 16, 44, 1, 3.5, 12);
+      body += bl(ihsE(122, 114, 42, 21, -12) + ihsE(150, 110, 21, 20) + '<path d="M70,40 C90,46 104,72 120,96 L90,128 C80,112 72,98 62,84 Z"/>', coat);
+      body += ihsGloss(102, 100, 16, 4.2, -20, c.l) + ihsGloss(86, 66, 12, 3.6, 48, c.l) + ln('M92,134 Q124,140 164,124', BR, 3.4, 'opacity=".9"');
+      body += ln(ihsCirc(154, 118, 8) + ihsCirc(154, 118, 4), BR, 2.2) + ci(154, 118, 1.6, BR, 0);
+      body += ihsLeg([[90, 124], [70, 136], [56, 150]], 6.4, coat, { band: GOLD }) + ihsLeg([[150, 124], [161, 152], [151, 183]], 6.8, coat, { band: GOLD });
+      if (!PET_LITE) front += ihsG(ihsTongue(60, 154, 16, 10, 40, 2) + ihsTongue(190, 152, 14, 9, -20, 2), 'flick', 120, 150);
+      // tấm phủ đỏ viền vòng tròn tiếp tuyến + yên vàng mặt trời
+      body += pa('M104,96 L154,90 L156,116 Q150,124 142,118 Q136,128 128,122 Q120,130 112,124 Q104,128 106,118 Z', cel(RED, REDS), 3.5) + ihsTanRow(112, 116, 148, 110, 5, 3, '#ffd21f', 1.6) + ln('M106,102 L154,96', '#ffd21f', 2.2);
+      body += pa('M106,96 Q106,80 116,84 Q128,92 140,86 Q152,78 154,90 Q146,102 128,102 Q112,103 106,96 Z', GOLD, 3.5) + ihsSun(129, 95, 2, 5, 10, '#b8641e', 0) + hl(114, 88, 4, 1.6, -30, .7);
+      // giáp ngực đồng
+      body += pa('M66,86 Q78,110 98,120 L92,131 Q70,121 59,95 Z', cel(BR, BRS), 3.5) + [[67, 99], [77, 112], [89, 122]].map(([x, y]) => rivet(x, y, 2)).join('');
+      back += H.back; head += H.head + ihsChanfron(H, cel(BR, BRS), false);
+      if (!PET_LITE) front += ihsG(ihsTongue(H.nose[0] + 1, H.nose[1], 12, 8, 196, 2), 'flick', H.nose[0], H.nose[1]);
+      if (!PET_LITE) front += [[30, 112, 2.6], [178, 70, 2.2], [120, 52, 2]].map(([x, y, r], i) => `<g class="ember" style="animation-delay:-${i * .6}s">${ci(x, y, r, i % 2 ? '#ffd21f' : '#ff8a1f', 1.5)}</g>`).join('');
+      return { back, body, head, front, anc: ihsAnc(hx, hy, k, 1, [78, 90, 34], [132, 90, 56, 34], [80, 108, 30, 30]) };
+    },
+    4(c) { // Thần mã sắt chồm hai chân sau, phun lửa, bờm đuôi thành lửa lớn, giáp vàng Đông Sơn, tre ngà rực lửa
+      let back = '', body = '', head = '', front = '';
+      const coat = cel(c.b, c.s), far = cel(c.s, c.d), farHoof = cel(BRS, '#6e3a14');
+      const k = 1.06, hx = 70, hy = 46, H = ihsHead(hx, hy, k, 4, c, { L: 1, open: true });
+      back += ihsDrum(114, 100, 88);
+      back += ihsBamboo(160, 192, 182, 28, 9, 5, [.62, 30, 1], [[.46, -14, 30], [.82, 194, 26]]) + ihsBamboo(180, 192, 198, 98, 7, 3, 0, [[.62, -60, 22]]) + ihsBamboo(34, 192, 12, 104, 7.5, 3, [.42, 20, -1], [[.84, 204, 22], [.6, 160, 18]]);
+      const TB = [[146, 134], [170, 140], [188, 124], [194, 94]];
+      back += ihsG(ihsFire(TB, 4, 34, 22, 40, 1, 3.5) + ihsFire(TB, 3, 16, 10, 50, -1, 3.5), 'pt', 146, 134);
+      body += ihsLeg([[124, 160], [132, 172], [120, 185]], 6.2, far, { hoof: farHoof }) + ihsLeg([[106, 116], [88, 96], [74, 104]], 5.2, far, { hoof: farHoof });
+      back += ihsFire([[H.X(0), H.Y(-21)], [98, 22], [114, 54], [124, 88]], 6, 30, 22, 46, 1, 3.5, 14);
+      body += bl(`<path d="${capsule(98, 106, 134, 146, 21, 24)}"/><path d="M84,30 C100,34 114,56 124,86 L96,120 C90,100 88,86 80,70 Z"/>`, coat);
+      body += ihsGloss(110, 104, 16, 4.5, -48, c.l) + ihsGloss(100, 58, 12, 3.6, 60, c.l) + ln('M104,128 Q112,152 138,170', BR, 3.4, 'opacity=".9"') + ln('M86,74 Q88,96 96,116', BR, 2.6, 'opacity=".75"');
+      body += pa('M112,62 Q118,70 121,78 L97,108 Q91,104 86,98 Z', GOLD, 3.5) + ihsTanRow(113, 70, 93, 98, 4, 2.6, '#b8641e', 1.4);
+      body += ihsLeg([[142, 152], [156, 170], [144, 185]], 6.8, coat, { band: GOLD }) + ci(156, 170, 4.4, GOLD, 2.4);
+      // tấm phủ đỏ viền trống đồng + yên vàng
+      body += pa('M116,94 L146,124 L142,146 Q132,140 124,146 Q118,136 110,136 L108,116 Z', cel(RED, REDS), 3.5) + ihsTanRow(114, 132, 136, 138, 4, 3, '#ffd21f', 1.6) + ln('M114,106 L142,134', '#ffd21f', 2.2);
+      body += pa('M114,92 Q116,80 124,81 Q128,94 136,100 Q146,104 151,108 Q156,118 146,122 Q132,112 114,92 Z', GOLD, 3.5) + hl(120, 86, 3.6, 1.6, 60, .7);
+      // giáp ngực vàng hình khiên + mặt trời trống đồng + tua đỏ
+      body += pa('M82,78 C72,88 74,106 86,116 C96,110 100,98 98,88 C95,82 89,78 82,78 Z', cel('#ffd21f', '#d99500'), 3.5) + ci(86, 97, 8.6, GOLD, 3) + ihsSun(86, 97, 2.5, 7.2, 12, '#c8501e', 0);
+      body += ihsLeg([[100, 124], [76, 110], [62, 122]], 5.6, coat, { band: GOLD }) + ci(76, 110, 4.2, GOLD, 2.4);
+      back += H.back; head += H.head + ihsChanfron(H, GOLD, true);
+      head += ihsBreath(H.mouth[0], H.mouth[1], .84, 12);
+      if (!PET_LITE) front += spark4(78, 82, 5, '#fff6b0', 1.6, 'twinkle', 0) + spark4(124, 78, 4, '#ffffff', 1.4, 'twinkle', .7);
+      if (!PET_LITE) front += [[30, 28, 3.2], [154, 22, 2.6], [40, 150, 2.8], [182, 168, 2.4]].map(([x, y, r], i) => `<g class="ember" style="animation-delay:-${i * .5}s">${ci(x, y, r, i % 2 ? '#ffd21f' : '#ff8a1f', 1.6)}</g>`).join('');
+      return { back, body, head, front, anc: ihsAnc(hx, hy, k, 1, [92, 84, 32], [128, 96, 44, 48], [88, 104, 28, 34]) };
+    }
+  };
+
+  PET_SPECS.ep_ironhorse = {
+    el: 'metal',
+    c: { b: '#46447e', s: '#24214a', d: '#191636', l: '#9ea2ec', p: '#8c8fd6', ps: '#4a4c8e', i: '#ff9a1f' },
+    c4: { b: '#423e70', s: '#1f1b3e', d: '#15122b', l: '#8a86c8', i: '#ffd21f' },
+    draw(f, g, c) {
+      const C = f === 1 ? Object.assign({}, c, { b: '#5b578a', s: '#35315f', l: '#8783b8' }) : c;
+      return DR[f](C);
+    }
+  };
+})();
+/* ---------- HẾT SỬ THI ---------- */
+
+/* ----- Hình tạm cho pet Sử thi chưa có hình: trứng phát sáng (chỉ dùng khi thiếu khối thật ở trên) ----- */
+(function () {
+  const EGG_COL = {
+    fire: ['#ffd0a0', '#ff6a2b', '#ffd21f'], ice: ['#e8fbff', '#33b5e8', '#ffffff'], thunder: ['#fff3a0', '#7a4cff', '#33e1ff'], stone: ['#fff6e0', '#c99a6b', '#5dffc0'],
+    forest: ['#e6ffd0', '#2f9a3e', '#ff5fa2'], shadow: ['#e6d0ff', '#5a1fb0', '#33e1ff'], metal: ['#f4f7fc', '#56698c', '#ff2e4a']
+  };
+  function eggSpec(elm) {
+    const [l, d, a] = EGG_COL[elm];
+    return {
+      el: elm, c: { b: l, s: d },
+      draw(f) {
+        const h = 74 + f * 16, w = h * .78, top = GROUND - h, cy = GROUND - h * .48;
+        const egg = `M100,${f1(top)} C${f1(100 + w * .6)},${f1(top)} ${f1(100 + w * .58)},${f1(GROUND - h * .3)} ${f1(100 + w * .5)},${f1(GROUND - h * .16)} C${f1(100 + w * .38)},${f1(GROUND)} ${f1(100 - w * .38)},${f1(GROUND)} ${f1(100 - w * .5)},${f1(GROUND - h * .16)} C${f1(100 - w * .58)},${f1(GROUND - h * .3)} ${f1(100 - w * .6)},${f1(top)} 100,${f1(top)} Z`;
+        let back = '';
+        if (!PET_LITE) {
+          let rays = '';
+          for (let i = 0; i < 12; i++) { const a0 = (i * 30 - 6) * Math.PI / 180, a1 = (i * 30 + 6) * Math.PI / 180; rays += `<path d="M100,${f1(cy)} L${P(100 + 110 * Math.cos(a0), cy + 110 * Math.sin(a0))} L${P(100 + 110 * Math.cos(a1), cy + 110 * Math.sin(a1))} Z" fill="${i % 2 ? '#fff6b0' : a}"/>`; }
+          back += `<circle cx="100" cy="${f1(cy)}" r="${f1(w * .9)}" fill="${a}" opacity=".2"/><g opacity=".35"><g class="spin" style="transform-origin:100px ${f1(cy)}px">${rays}</g></g>`;
+        }
+        let body = pa(egg, cel(l, d, .58), 5.5);
+        body += `<path d="M${f1(100 - w * .5)},${f1(cy + 4)} Q100,${f1(cy - 10)} ${f1(100 + w * .5)},${f1(cy + 4)}" fill="none" stroke="${OL}" stroke-width="9"/><path d="M${f1(100 - w * .5)},${f1(cy + 4)} Q100,${f1(cy - 10)} ${f1(100 + w * .5)},${f1(cy + 4)}" fill="none" stroke="url(#gGold)" stroke-width="5"/>`;
+        for (let k = 0; k < f + 2; k++) { const ang = (k / (f + 2)) * Math.PI * 2, x = 100 + Math.cos(ang) * w * .26, y = cy - h * .22 + Math.sin(ang) * h * .14; body += spark4(x, y, 4 + f, k % 2 ? '#fff6b0' : a, 1.8); }
+        body += hl(100 - w * .22, top + h * .2, w * .12, h * .07, -25, .7);
+        const front = PET_LITE ? '' : spark4(100 + w * .62, top + h * .1, 7, '#fff', 2, 'twinkle', 0) + spark4(100 - w * .66, cy, 6, '#fff6b0', 2, 'twinkle', .6);
+        return { back, body, head: '', front, anc: { head: [100, top + 6, w * .7], eyes: [100, top + h * .3, w * .6], neck: [100, cy - 6, w * .6], back: [100, top + h * .3, w * .8, h * .55], body: [100, cy + h * .14, w * .7, h * .5], halo: [100, top - 12, w * .32] } };
+      }
+    };
+  }
+  ECON.epics.forEach(([id, el]) => { if (!PET_SPECS[id]) PET_SPECS[id] = eggSpec(el); });
+})();

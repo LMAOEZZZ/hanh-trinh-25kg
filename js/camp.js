@@ -15,6 +15,8 @@ const CAMP_SLOTS = (() => {
   for (let k = 0; k < 7; k++) rows.forEach(([y, s, xs]) => out.push([xs[k], y, s]));
   return out;
 })();
+// Chỗ của 7 pet Sử thi: bay trên mây vàng ở bầu trời trại
+const EPIC_CAMP = [[44, 106, .2], [98, 92, .2], [152, 110, .2], [206, 90, .2], [258, 108, .2], [306, 92, .2], [360, 112, .2]];
 function campSVG(D) {
   const on = k => !!(state.decor[k] && state.decor[k].on);
   const night = on('night');
@@ -53,6 +55,12 @@ function campSVG(D) {
     const st = state.pets[p.id]; if (!st) return;
     const [x, y, k] = CAMP_SLOTS[i];
     items.push({ y, svg: `<g class="scene-pet" data-pet="${p.id}" transform="translate(${f1(x - 100 * k)} ${f1(y - 189 * k)}) scale(${k})" tabindex="0" role="button" aria-label="${p.name}"><g class="bob" style="animation-delay:-${f1(i * .37)}s">${petInner(p.id, st.f, { eq: st.eq, lite: true })}</g></g>` });
+  });
+  EPICS.forEach((p, i) => {
+    const st = state.pets[p.id]; if (!st) return;
+    const [x, y, k] = EPIC_CAMP[i];
+    const cloud = `<g class="drift" style="animation-duration:${7 + i}s">` + bl(`<ellipse cx="${x}" cy="${y + 3}" rx="22" ry="6"/><circle cx="${x - 10}" cy="${y}" r="7"/><circle cx="${x + 9}" cy="${y - 1}" r="8"/>`, '#fff6d0', 2.5) + ln(`M${x - 18},${y + 5} Q${x},${y + 9} ${x + 18},${y + 5}`, '#ffd21f', 2) + `</g>`;
+    items.push({ y, svg: cloud + `<g class="scene-pet flyer epic-camp" data-pet="${p.id}" transform="translate(${f1(x - 100 * k)} ${f1(y - 189 * k)}) scale(${k})" tabindex="0" role="button" aria-label="${p.name}"><g class="bob" style="animation-delay:-${f1(i * .53)}s">${petInner(p.id, st.f, { eq: st.eq, lite: true })}</g></g>` });
   });
   if (on('fire')) items.push({ y: 228, svg: `<circle cx="200" cy="220" r="34" fill="#ffb21f" opacity=".2"/>` + tube('M180,238 L220,226 M180,226 L220,238', '#8a4a1f', 5) + `<g class="flame">${flame(200, 232, 40, 28, 3, true, 3.5)}</g>` });
   if (on('rock')) items.push({ y: 250, svg: bl('<ellipse cx="104" cy="248" rx="22" ry="13"/><ellipse cx="124" cy="252" rx="13" ry="9"/>', cel('#c9c4e6', '#5a5288'), 3.5) + bl('<ellipse cx="300" cy="250" rx="18" ry="12"/>', cel('#c9c4e6', '#5a5288'), 3.5) });
@@ -93,7 +101,7 @@ const NAV_ICONS = { today: () => ic('fire'), calendar: () => ic('calendar'), pet
 function shopIcon(id) {
   const it = SHOP_BY[id]; if (!it) return '';
   if (it.cat === 'wear') {
-    const vb = { head: '-50 -36 100 70', eyes: '-46 -24 92 44', neck: '-38 -16 76 54', back: '-66 -12 132 100', body: '-38 -36 76 82' }[it.slot];
+    const vb = { gcrown: '-50 -44 100 76', gwings: '-112 -96 224 130', gsash: '-38 -16 76 64' }[id] || { head: '-50 -36 100 70', eyes: '-46 -24 92 44', neck: '-38 -16 76 54', back: '-66 -12 132 100', body: '-38 -36 76 82' }[it.slot];
     return `<svg class="ic shop-ic" viewBox="${vb}" aria-hidden="true">${WEAR_ART[id]()}</svg>`;
   }
   if (it.cat === 'fx') {

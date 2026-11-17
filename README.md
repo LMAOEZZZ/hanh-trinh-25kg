@@ -6,12 +6,15 @@ App theo dõi 84 ngày giảm 25 kg: chốt ngày, nuôi pet, ghi cân. Cài ra 
 
 ## Có gì trong app
 
+- **Vòng quay Sử thi**: mỗi ngày 1 lượt khi xong hết mục trong ngày (kể cả mục phụ) và đã chốt ngày. Quên quay thì quay bù hôm qua được, ngày bỏ lỡ không cộng dồn lượt. Ô thưởng xếp theo độ hiếm: pet Sử thi (11%), đồ độc quyền (6%), khiên giữ chuỗi (8%), thịt x2 ngày mai (10%), +12 thịt (14%), +90 xu (13%), +5 thịt (20%), +30 xu (18%).
+- **7 pet Sử thi**, mỗi hệ một con: Nghê Lửa, Hạc Băng Cực Quang, Thanh Long Sấm, Bạch Tượng Ngọc, Bướm Thần Rừng, Cá Voi Ngân Hà, Ngựa Sắt Thánh Gióng. Ô Sử thi luôn là con "nổi bật", đổi lần lượt qua các con chưa có sau mỗi lượt quay. Thanh **Năng lượng sử thi** đếm số lượt hụt: hụt 7 lượt liền thì lượt thứ 8 chắc chắn ra, nên tối đa 56 lượt là đủ 7 con. Đủ bộ rồi thì ô Sử thi thành Rương Sử thi (+30 thịt +120 xu).
+- **Độ hiếm**: Thường → Hiếm → Siêu hiếm → Huyền thoại → Sử thi. Bậc tím trước đây tên "Sử thi" nay gọi là "Siêu hiếm".
 - **28 pet, 7 hệ** (Lửa, Băng, Sấm, Đá, Rừng, Bóng đêm, Thép), mỗi hệ 4 con. Cứ chốt đủ 3 ngày (không cần liên tục) là mở thêm một con: ngày 1, 4, 7… tới ngày 82. Con đầu nở từ trứng, con cuối là Phượng Hoàng huyền thoại.
 - **4 dạng tiến hóa** cho mỗi con: Non → Chiến binh → Đấu sĩ → Tối thượng, mỗi dạng một dáng riêng (bé con dễ thương → lớn dần → dạng thần). Cho ăn đủ thịt thì bấm Tiến hóa. Pet mở càng muộn thì giá tiến hóa càng rẻ, nên con mở ngày 82 vẫn kịp lên dạng 4.
 - **Cảnh nền riêng** cho từng con (núi lửa, biển băng, rừng nấm, phố neon…) và **trại chung** cho cả đội.
 - **Cửa hàng**: trang phục (mũ, kính, khăn, áo choàng, giáp, đai, vương miện), hiệu ứng (hào quang, tia sét, lửa bao quanh, sao lấp lánh, vệt sáng) và đồ trang trí trại. Mua một lần, mặc cho pet nào cũng được.
 - **Thịt và xu**: mỗi mục tích trong ngày +1 thịt +3 xu (ngày chưa chốt vẫn có), chốt ngày +4 thịt +10 xu, thêm thưởng mốc chuỗi, thưởng quay lại sau khi đứt chuỗi và thưởng thành tựu. Bỏ lỡ ngày không bị trừ gì, pet không bao giờ chết.
-- **61 thành tựu**, chốt đều đặn thì cứ vài ngày có một cái mới.
+- **71 thành tựu** (thêm 10 thành tựu vòng quay và Sử thi), chốt đều đặn thì cứ vài ngày có một cái mới.
 - **Hình minh họa cho từng bài tập** kèm một dòng lưu ý form. Chạm hình để xem to.
 - **Thực đơn từng món**: mỗi món một dòng có gram và kcal, mỗi bữa có đạm, tinh bột, béo.
 
@@ -31,6 +34,14 @@ Lưu ý: trên iPhone, app ngoài màn hình chính và Safari giữ dữ liệu
 
 1. Mở địa chỉ trên bằng Chrome.
 2. Bấm menu ba chấm → **Cài đặt ứng dụng** (máy cũ ghi **Thêm vào màn hình chính**). Trong app cũng có nút **Cài app** ở Cài đặt.
+
+## Lên bản 4
+
+Bản 4 thêm vòng quay Sử thi và 7 pet Sử thi (trong tab Pet → **Vòng quay**). Dữ liệu cũ giữ nguyên: pet, dạng, thịt, xu, đồ đã mua, đồ đang mặc, ngày đã chốt, chuỗi. Vòng quay bắt đầu từ 0. File sao lưu bản cũ vẫn nhập được. Khi thanh **Có bản mới, chạm để cập nhật** hiện ra, chạm vào là xong.
+
+Pet Sử thi tiến hóa bằng thịt như pet thường (8 → 14 → 22 thịt), về trại kèm 20 thịt quà ra mắt. Giá tiến hóa của 28 pet thường không đổi. Mô phỏng 10.000 lần: chơi đủ 84 ngày (chốt đủ, quay đủ) thì cả 28 pet thường và 7 Sử thi đều lên dạng 4 trước hoặc đúng ngày 84, kể cả khi con Sử thi cuối chỉ ra ở lượt 56 và các ô thịt toàn trượt.
+
+Ngày đã chốt: mục chính khóa như cũ, mục phụ (cân, ngủ, đo eo) vẫn tích được để mở lượt quay.
 
 ## Lên bản 3
 
@@ -66,7 +77,7 @@ Quá 7 ngày chưa sao lưu, màn Hôm nay hiện một lời nhắc nhỏ. Bấ
 
 Khi có bản mới, cuối màn hình hiện thanh **Có bản mới, chạm để cập nhật**. Chạm vào là xong, dữ liệu giữ nguyên. Muốn kiểm tra ngay: Cài đặt → **Kiểm tra bản mới**.
 
-Cho người sửa code: sửa file nào cũng phải tăng `VERSION` trong `sw.js` (v2 → v3…) rồi mới đẩy lên. Thêm file mới thì thêm cả tên file vào danh sách `ASSETS` trong `sw.js`.
+Cho người sửa code: sửa file nào cũng phải tăng `VERSION` trong `sw.js` (v3 → v4…) rồi mới đẩy lên. Thêm file mới thì thêm cả tên file vào danh sách `ASSETS` trong `sw.js`.
 
 ## Hạn chế
 
@@ -80,8 +91,9 @@ Cho người sửa code: sửa file nào cũng phải tăng `VERSION` trong `sw.
 - `index.html`, `manifest.webmanifest`, `sw.js`: vỏ app, khai báo cài đặt, chạy offline.
 - `css/`: giao diện.
 - `js/data.js`: kế hoạch tập, bài tập, thực đơn, câu động lực.
-- `js/econ.js`: pet, cửa hàng, thành tựu và toàn bộ con số thưởng (khối `ECON`).
+- `js/econ.js`: pet, pet Sử thi, cửa hàng, thành tựu, vòng quay và toàn bộ con số thưởng (khối `ECON`).
 - `js/gfx.js`, `js/pets.js`, `js/wear.js`, `js/scenes.js`, `js/camp.js`, `js/icons.js`, `js/exart.js`: hình vẽ SVG (pet, trang phục, cảnh nền, trại, icon, bài tập).
+- `js/gacha.js`: vòng quay Sử thi (luật quay, bảo hiểm, màn quay, hiệu ứng ra Sử thi).
 - `js/app.js`: logic và màn hình. `js/pwa.js`: cập nhật bản mới, cài app.
 - `fonts/`: font Baloo 2 (giấy phép SIL OFL, xem `fonts/OFL.txt`), không gọi Google Fonts.
 - `icons/`: `icon.svg` là bản vẽ gốc của icon.

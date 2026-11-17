@@ -35,8 +35,21 @@ const ECON = /*ECON-JSON*/{
     ["lift60", "lift", 60, 2], ["food70", "food", 70, 2], ["evo4d", "evo4", 20, 2], ["pets24", "pets", 24, 2], ["heavy30", "heavy", 30, 2], ["decor10", "decor", 10, 2],
     ["s75", "streak", 75, 2], ["pets28", "pets", 28, 2], ["evo4e", "evo4", 28, 2], ["total84", "total", 84, 2],
     ["k5", "kg", 5, 0], ["k10", "kg", 10, 1], ["k15", "kg", 15, 1], ["k20", "kg", 20, 2], ["k25", "kg", 25, 2],
-    ["perfect", "perfectweek", 1, 1], ["comeback", "comeback", 1, 0], ["weigh7", "weighrun", 7, 0], ["sleep7", "sleeprun", 7, 0], ["measure4", "measure", 4, 0]
-  ]
+    ["perfect", "perfectweek", 1, 1], ["comeback", "comeback", 1, 0], ["weigh7", "weighrun", 7, 0], ["sleep7", "sleeprun", 7, 0], ["measure4", "measure", 4, 0],
+    ["spin1", "spin", 1, 0], ["epic1", "epic", 1, 1], ["spinrun7", "spinrun", 7, 1], ["ep4a", "ep4", 1, 1], ["epic4", "epic", 4, 1], ["spin30", "spin", 30, 1],
+    ["epic7", "epic", 7, 2], ["spinrun30", "spinrun", 30, 2], ["spin60", "spin", 60, 2], ["ep4g", "ep4", 7, 2]
+  ],
+  "epics": [["ep_nghe", "fire"], ["ep_crane", "ice"], ["ep_loong", "thunder"], ["ep_elephant", "stone"], ["ep_butterfly", "forest"], ["ep_whale", "shadow"], ["ep_ironhorse", "metal"]],
+  "epic": { "evo": [8, 14, 22], "gift": 20 },
+  "gacha": {
+    "pity": 8,
+    "slots": [
+      ["epic", 11, 0, 0], ["item", 6, 0, 0], ["shield", 8, 0, 0], ["x2", 10, 0, 0],
+      ["meatL", 14, 12, 0], ["coinL", 13, 0, 90], ["meatS", 20, 5, 0], ["coinS", 18, 0, 30]
+    ],
+    "chest": [30, 120], "itemDup": [12, 80], "shieldDup": [10, 30], "shieldCap": 3
+  },
+  "gitems": [["gcrown", "head"], ["gstar", "eyes"], ["gsash", "neck"], ["gwings", "back"], ["gaura", "fx"]]
 }/*ECON-JSON*/;
 
 const ELEMENTS = {
@@ -45,7 +58,10 @@ const ELEMENTS = {
   forest: { n: 'Rừng', c: '#3fe06a', bg: ['#7be35a', '#1f7a45'] }, shadow: { n: 'Bóng đêm', c: '#b46bff', bg: ['#8a5cff', '#2a1260'] },
   metal: { n: 'Thép', c: '#a7b8d0', bg: ['#c9d4e6', '#3d4c70'] }
 };
-const RARITY = [{ n: 'Thường', c: '#9fb1c9' }, { n: 'Hiếm', c: '#38b6ff' }, { n: 'Sử thi', c: '#b46bff' }, { n: 'Huyền thoại', c: '#ffc21f' }];
+// Độ hiếm từ thấp tới cao. Bản 4: bậc tím cũ đổi tên thành "Siêu hiếm", "Sử thi" thành bậc cao nhất (chỉ có từ vòng quay).
+const EPIC_BG = 'linear-gradient(100deg,#ff3b4f 0%,#ffd21f 28%,#fff6b0 44%,#3fe06a 60%,#33e1ff 76%,#b46bff 100%)';
+const RARITY = [{ n: 'Thường', c: '#9fb1c9' }, { n: 'Hiếm', c: '#38b6ff' }, { n: 'Siêu hiếm', c: '#b46bff' }, { n: 'Huyền thoại', c: '#ffc21f' }, { n: 'Sử thi', c: EPIC_BG, epic: true }];
+const rarTag = (r, cls = 'tag-el') => `<span class="${cls}${RARITY[r].epic ? ' epic-tag' : ''}" style="background:${RARITY[r].c}">${RARITY[r].n}</span>`;
 const PET_INFO = {
   wolf: ['Sói Lửa', 'Nở từ quả trứng đầu tiên. Nóng tính, trung thành, ghét nhất ngày bỏ tập.'],
   bear: ['Gấu Thép', 'Thân thép, đầu lạnh. Nâng gì cũng được, trừ trà sữa.'],
@@ -76,8 +92,23 @@ const PET_INFO = {
   uni: ['Kỳ Lân Điện', 'Bờm phóng điện, sừng gọi sét. Chỉ hiện ra với người không bỏ cuộc.'],
   phoenix: ['Phượng Hoàng', 'Tái sinh từ 84 ngày lửa. Ai có nó là đã về đích.']
 };
+// 7 pet Sử thi: mỗi hệ một con, chỉ có từ vòng quay
+const EPIC_INFO = {
+  ep_nghe: ['Nghê Lửa', 'Linh thú giữ cổng đình. Bờm lửa bùng lên mỗi lần ông chốt đủ ngày.'],
+  ep_crane: ['Hạc Băng Cực Quang', 'Bay xuống từ trời băng, mỗi lần vỗ cánh kéo theo cả dải cực quang.'],
+  ep_loong: ['Thanh Long Sấm', 'Rồng xanh cưỡi mây giông. Gầm một tiếng là cơn thèm ngọt tan biến.'],
+  ep_elephant: ['Bạch Tượng Ngọc', 'Voi trắng thân ngọc. Bước tới đâu, kỷ luật vững tới đó.'],
+  ep_butterfly: ['Bướm Thần Rừng', 'Từ con sâu đội lá thành thần rừng cánh kính màu. Nhắc ông: thay đổi nào cũng cần thời gian trong kén.'],
+  ep_whale: ['Cá Voi Ngân Hà', 'Bơi giữa biển sao. Mỗi lần thở ra là một chùm thiên hà mới.'],
+  ep_ironhorse: ['Ngựa Sắt Thánh Gióng', 'Vươn vai thành thần mã, phun lửa thiêu rụi mọi cơn lười.']
+};
 const PETS = ECON.pets.map(([id, el, rar], i) => ({ id, el, rar, i, need: ECON.unlock.first + ECON.unlock.every * i, name: PET_INFO[id][0], intro: PET_INFO[id][1] }));
-const PET_BY = Object.fromEntries(PETS.map(p => [p.id, p]));
+const EPICS = ECON.epics.map(([id, el], i) => ({ id, el, rar: 4, i, epic: true, name: EPIC_INFO[id][0], intro: EPIC_INFO[id][1] }));
+const ALL_PETS = PETS.concat(EPICS);
+const PET_BY = Object.fromEntries(ALL_PETS.map(p => [p.id, p]));
+const isEpic = id => !!(PET_BY[id] && PET_BY[id].epic);
+// Giá tiến hóa theo pet: Sử thi dùng bảng riêng
+const costOf = (id, stage) => isEpic(id) ? ECON.epic.evo[stage - 1] : evoCost(PET_BY[id].i, stage);
 // Giá tiến hóa giảm dần theo thứ tự mở, để pet mở muộn vẫn kịp lên dạng 4
 function evoCost(i, stage) { // stage 1: dạng 1→2, 2: 2→3, 3: 3→4
   const E = ECON.evo, t = i / (PETS.length - 1), m = E.multFirst + (E.multLast - E.multFirst) * t;
@@ -100,7 +131,15 @@ const SHOP_INFO = {
   rainbow: ['Cầu vồng', 'Cầu vồng vắt ngang sau núi.']
 };
 const SHOP = ECON.shop.map(([id, slot, p]) => ({ id, slot, p, cat: slot === 'fx' ? 'fx' : slot === 'decor' ? 'decor' : 'wear', n: SHOP_INFO[id][0], d: SHOP_INFO[id][1] }));
-const SHOP_BY = Object.fromEntries(SHOP.map(x => [x.id, x]));
+// Đồ độc quyền vòng quay: không bán trong cửa hàng, mặc như đồ thường
+const GITEM_INFO = {
+  gcrown: ['Vương miện Sử thi', 'Vàng đỏ nạm bảy viên đá bảy màu.'], gstar: ['Kính sao băng', 'Kính hình sao, tròng ánh cầu vồng.'],
+  gsash: ['Khăn cầu vồng', 'Khăn lụa bảy màu bay theo gió.'], gwings: ['Cánh vàng kim', 'Đôi cánh lông vũ vàng ròng.'],
+  gaura: ['Hào quang Sử thi', 'Tia sáng cầu vồng xoay sau lưng, đá quý bay quanh người.']
+};
+const GITEMS = ECON.gitems.map(([id, slot]) => ({ id, slot, p: 0, cat: slot === 'fx' ? 'fx' : 'wear', gacha: true, n: GITEM_INFO[id][0], d: GITEM_INFO[id][1] }));
+const WEARABLES = SHOP.filter(x => x.cat !== 'decor').concat(GITEMS);
+const SHOP_BY = Object.fromEntries(SHOP.concat(GITEMS).map(x => [x.id, x]));
 const SLOT_NAME = { head: 'Mũ', eyes: 'Kính', neck: 'Cổ', back: 'Lưng', body: 'Thân', fx: 'Hiệu ứng' };
 
 /* ----- Thành tựu: tên, mô tả, huy hiệu ----- */
@@ -119,11 +158,16 @@ const ACH_TEXT = {
   total84: ['Về đích', 'Chốt đủ 84 ngày'], k5: ['Giảm 5 kg', 'Cân sáng thấp hơn cân ban đầu 5 kg'], k10: ['Giảm 10 kg', 'Cân sáng thấp hơn cân ban đầu 10 kg'],
   k15: ['Giảm 15 kg', 'Cân sáng thấp hơn cân ban đầu 15 kg'], k20: ['Giảm 20 kg', 'Cân sáng thấp hơn cân ban đầu 20 kg'], k25: ['Giảm 25 kg', 'Chạm mốc −25 kg'],
   perfect: ['Tuần sắt', 'Chốt đủ 7/7 ngày trong một tuần'], comeback: ['Quay lại mạnh hơn', 'Chốt lại sau khi đứt chuỗi'], weigh7: ['Cân đều tay', 'Cân buổi sáng 7 ngày liền'],
-  sleep7: ['Ngủ như gấu', 'Ngủ đủ 7–8 tiếng 7 đêm liền'], measure4: ['Thước dây', 'Đo eo và chụp ảnh 4 Chủ nhật']
+  sleep7: ['Ngủ như gấu', 'Ngủ đủ 7–8 tiếng 7 đêm liền'], measure4: ['Thước dây', 'Đo eo và chụp ảnh 4 Chủ nhật'],
+  spin1: ['Vòng quay đầu tiên', 'Quay vòng quay lần đầu'], epic1: ['Sử thi đầu tiên', 'Có pet Sử thi đầu tiên'], spinrun7: ['Tay quay đều', 'Quay đủ 7 ngày liền'],
+  ep4a: ['Sử thi tối thượng', 'Đưa một pet Sử thi lên dạng 4'], epic4: ['Nửa bộ Sử thi', 'Có 4 pet Sử thi'], spin30: ['Ba mươi vòng', 'Quay 30 lượt'],
+  epic7: ['Đủ bộ Sử thi', 'Có cả 7 pet Sử thi'], spinrun30: ['Một tháng không trượt', 'Quay đủ 30 ngày liền'], spin60: ['Sáu mươi vòng', 'Quay 60 lượt'],
+  ep4g: ['Thần thoại sống', 'Cả 7 pet Sử thi lên dạng 4']
 };
 // Biểu tượng trong huy hiệu theo loại
 const ACH_GLYPH = {
   total: 'calendar', streak: 'fire', lift: 'barbell', heavy: 'hiit', abs: 'abs', water: 'water', food: 'meal', steps: 'steps', pets: 'paw', evo2: 'evolve', evo4: 'evolve',
-  owned: 'bag', outfit: 'hat', fx: 'magic', decor: 'tent', kg: 'scale', refeed: 'rice', perfectweek: 'star', comeback: 'heartbeat', weighrun: 'scale', sleeprun: 'sleep', measure: 'tape'
+  owned: 'bag', outfit: 'hat', fx: 'magic', decor: 'tent', kg: 'scale', refeed: 'rice', perfectweek: 'star', comeback: 'heartbeat', weighrun: 'scale', sleeprun: 'sleep', measure: 'tape',
+  spin: 'wheel', spinrun: 'wheel', epic: 'gem', ep4: 'gem'
 };
 const ACH = ECON.ach.map(([id, kind, n, t]) => ({ id, kind, n, t, name: ACH_TEXT[id][0], d: ACH_TEXT[id][1] }));

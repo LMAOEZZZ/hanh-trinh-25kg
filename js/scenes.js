@@ -157,3 +157,521 @@ const SCENE_NAME = {
 function sceneSVG(id, cls = '') {
   return `<svg class="pscene ${cls}" viewBox="0 0 ${SW} ${SH}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${(SCENES[id] || SCENES.wolf)()}</svg>`;
 }
+
+/* ---------- SỬ THI ---------- */
+// Cảnh nền của 7 pet Sử thi ghép ngay dưới dòng này.
+
+/* ===================== CẢNH NỀN · NGHÊ LỬA (ep_nghe): Sân đền cổ lúc hoàng hôn =====================
+   viewBox 0 0 360 300, bục đứng tâm (180, 258) như js/scenes.js. Nạp SAU scenes.js (dùng SCENES, SCENE_NAME, skyR, starsR, embers, SW, SH).
+   Đình hai tầng mái đao cong, ngọc lửa trên nóc; hai cột đá đèn lửa; lư hương đồng khói cuộn; mây lửa vàng; mặt trời trống đồng; bục là mặt trống đồng.
+   Hàm phụ trong IIFE, tiền tố ngh, không thêm tên toàn cục. */
+(() => {
+  if (typeof SCENES === 'undefined') return;
+  const R = Math.PI / 180;
+  // Nét xoắn ốc (lọn mây, đầu đao)
+  const nghSp = (x, y, r, sd = 1) => { const k = r * .25, f = sd > 0 ? 1 : 0; return `M${P(x - k * .2, y)} A${f1(k * .9)},${f1(k * .9)} 0 0 ${f} ${P(x + k * 1.6, y)} A${f1(k * 1.9)},${f1(k * 1.9)} 0 0 ${f} ${P(x - k * 2.2, y)} A${f1(k * 2.7)},${f1(k * 2.7)} 0 0 ${f} ${P(x + k * 3.2, y)}`; };
+  // Mây lửa vàng: dải lọn tròn, hai đầu xoắn
+  function nghCloud(x, y, k, cls = 'drift') {
+    const L = [[x, y, 7 * k], [x + 13 * k, y - 6 * k, 10 * k], [x + 29 * k, y - 7 * k, 11 * k], [x + 44 * k, y - 2 * k, 8 * k], [x + 56 * k, y + 1 * k, 6 * k]];
+    let s = bl(L.map(([cx, cy, r]) => `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(r)}"/>`).join('') + `<rect x="${f1(x - 4 * k)}" y="${f1(y - 2 * k)}" width="${f1(64 * k)}" height="${f1(9 * k)}" rx="${f1(4.5 * k)}"/>`, cel('#ffe27a', '#ff9a2a', .68), 3);
+    s += ln(nghSp(x, y, 6 * k, -1) + nghSp(x + 29 * k, y - 7 * k, 9 * k, 1) + nghSp(x + 56 * k, y + 1 * k, 5 * k, 1) + ` M${P(x + 4 * k, y + 4 * k)} H${f1(x + 52 * k)}`, '#e0700f', 1.8);
+    return `<g class="${cls}">${s}${hl(x + 24 * k, y - 13 * k, 5 * k, 2 * k, -15, .6)}</g>`;
+  }
+  // Mặt trời hoa văn trống đồng: sao 14 cánh, vành chấm
+  function nghSun(x, y, r) {
+    let st = '';
+    for (let i = 0; i < 14; i++) { const a0 = (i * 360 / 14) * R, a1 = ((i + .5) * 360 / 14) * R; st += (i ? 'L' : 'M') + P(x + Math.cos(a0) * r * .78, y + Math.sin(a0) * r * .78) + 'L' + P(x + Math.cos(a1) * r * .36, y + Math.sin(a1) * r * .36); }
+    return `<circle cx="${x}" cy="${y}" r="${f1(r * 1.9)}" fill="#ffd27a" opacity=".12"/><circle cx="${x}" cy="${y}" r="${f1(r * 1.4)}" fill="#ffd27a" opacity=".14"/>` + ci(x, y, r, 'url(#gSun)', 4) +
+      `<g class="spin-slow" style="transform-origin:${x}px ${y}px">${pa(st + 'Z', '#fff3b0', 0)}${ln(st + 'Z', '#d98200', 1.6)}<circle cx="${x}" cy="${y}" r="${f1(r * .88)}" fill="none" stroke="#e08a00" stroke-width="2.4" stroke-dasharray="0 6" stroke-linecap="round"/></g>` + ci(x, y, r * .16, '#e08a00', 1.6);
+  }
+  // Mái đao cong: đỉnh nóc từ x0..x1 tại y, chân mái rộng thêm w, cao h; đầu đao xoắn
+  function nghRoof(x0, x1, y, w, h, col, cold) {
+    const a = x0 - w, b = x1 + w, yb = y + h;
+    let s = pa(`M${P(x0, y)} L${P(x1, y)} Q${P(x1 + w * .4, y + h * .7)} ${P(b, yb - 4)} Q${P(b + 10, yb - 4)} ${P(b + 13, y + h * .25)} Q${P(b + 15, yb + 2)} ${P(b - 2, yb + 6)} L${P(a + 2, yb + 6)} Q${P(a - 15, yb + 2)} ${P(a - 13, y + h * .25)} Q${P(a - 10, yb - 4)} ${P(a, yb - 4)} Q${P(x0 - w * .4, y + h * .7)} ${P(x0, y)} Z`, cel(col, cold, .7), 3.5);
+    // Hàng ngói vảy
+    let t = '';
+    for (let r = 1; r <= 2; r++) { const yy = y + h * r / 3, xa = x0 - w * r / 3 * .9, xb = x1 + w * r / 3 * .9, n = Math.round((xb - xa) / 11); t += `M${P(xa, yy)}`; for (let i = 0; i < n; i++) t += ` q${f1((xb - xa) / n / 2)},4 ${f1((xb - xa) / n)},0`; t += ' '; }
+    s += ln(t, cold, 1.8) + ln(`M${P(a + 2, yb + 3)} L${P(b - 2, yb + 3)}`, '#ffd21f', 2.2);
+    s += ln(nghSp(b + 9, y + h * .3, 7, 1) + nghSp(a - 9, y + h * .3, 7, -1), '#ffd21f', 2.2);
+    return s;
+  }
+  // Cột đá đèn lửa
+  function nghPillar(x, top, bot) {
+    let s = pa(`M${x - 13},${bot} V${top + 22} H${x + 13} V${bot} Z`, cel('#a99ed6', '#5e5296', .7), 3.5) +
+      ln(`M${x - 13},${top + 40} H${x + 13} M${x - 13},${top + 46} H${x + 13} M${x - 13},${bot - 22} H${x + 13}`, '#5e5296', 2) +
+      ln(nghSp(x, top + 66, 8, 1) + nghSp(x, top + 96, 8, -1), '#5e5296', 2) +
+      pa(`M${x - 19},${bot + 4} V${bot - 8} H${x + 19} V${bot + 4} Z`, cel('#b8aee2', '#6a5ea6'), 3.5) +
+      pa(`M${x - 18},${top + 22} H${x + 18} L${x + 13},${top + 12} H${x - 13} Z`, cel('#b8aee2', '#6a5ea6'), 3.5) +
+      pa(`M${x - 16},${top + 12} Q${x},${top + 22} ${x + 16},${top + 12} Q${x + 14},${top} ${x},${top} Q${x - 14},${top} ${x - 16},${top + 12} Z`, cel('#e0a24a', '#94561c'), 3.5) +
+      `<g class="flame">${flame(x, top + 2, 30, 20, 2, true, 3.5)}</g>` + hl(x - 6, top + 34, 2.5, 10, 0, .3);
+    return `<circle cx="${x}" cy="${top - 6}" r="30" fill="#ffb21f" opacity=".14"/>` + s;
+  }
+  // Lư hương đồng ba chân, nhang và khói cuộn
+  function nghCenser(x, y) {
+    let s = `<g class="smoke">${ln(`M${x - 4},${y - 40} q-8,-12 2,-22 q10,-10 0,-22 M${x + 4},${y - 42} q10,-10 2,-20 q-6,-8 4,-18`, '#f2e6ff', 3, 'opacity=".55"')}</g>`;
+    s += ln(`M${x - 5},${y - 26} L${x - 7},${y - 44} M${x},${y - 26} V${y - 47} M${x + 5},${y - 26} L${x + 7},${y - 44}`, '#8a2a3a', 2.4) + [[x - 7, y - 44], [x, y - 47], [x + 7, y - 44]].map(([a, b]) => ci(a, b, 1.6, '#ffb21f', 0)).join('');
+    s += ln(`M${x - 14},${y - 6} L${x - 18},${y + 6} M${x + 14},${y - 6} L${x + 18},${y + 6}`, OL, 7) + ln(`M${x - 14},${y - 6} L${x - 18},${y + 6} M${x + 14},${y - 6} L${x + 18},${y + 6}`, '#b8742a', 3.5);
+    s += pa(`M${x - 22},${y - 24} Q${x - 24},${y} ${x},${y} Q${x + 24},${y} ${x + 22},${y - 24} Z`, cel('#e8ae52', '#94561c', .7), 3.5) + el(x, y - 24, 23, 5, cel('#f3c160', '#bb7a2c'), 3.2);
+    s += ln(`M${x - 26},${y - 30} q-6,6 0,12 M${x + 26},${y - 30} q6,6 0,12`, OL, 6.5) + ln(`M${x - 26},${y - 30} q-6,6 0,12 M${x + 26},${y - 30} q6,6 0,12`, '#e8ae52', 3);
+    s += ln(`M${x - 18},${y - 13} Q${x},${y - 6} ${x + 18},${y - 13}`, '#94561c', 2) + `<g fill="#f3c160" stroke="#94561c" stroke-width="1.3">${[-12, -4, 4, 12].map(d => `<circle cx="${x + d}" cy="${f1(y - 10.5 + Math.abs(d) * -.12)}" r="2.2"/>`).join('')}</g>` + hl(x - 12, y - 18, 2.5, 5, 10, .4);
+    return s;
+  }
+  SCENES.ep_nghe = () => {
+    let s = skyR('#1e0d4a', '#4a1a6e', '#b8407a', '#ff8a4a') + starsR(10, 101, 70);
+    s += nghSun(292, 60, 26);
+    s += nghCloud(12, 46, 1) + nghCloud(190, 30, .8, 'drift d2');
+    // Đình hai tầng mái
+    s += pa('M124,124 H236 V146 H124 Z', cel('#b8283a', '#7a1428'), 3.5) + ln('M136,128 V142 M148,128 V142 M160,128 V142 M200,128 V142 M212,128 V142 M224,128 V142', '#ffd21f', 2) + pa('M168,126 H192 V144 H168 Z', '#2a0a2a', 3);
+    s += nghRoof(140, 220, 96, 26, 30, '#7a2e5e', '#4a1840');
+    s += pa('M134,90 H226 L230,97 H130 Z', cel('#e0a24a', '#94561c'), 3) + ln(nghSp(128, 88, 6, -1) + nghSp(232, 88, 6, 1), '#ffd21f', 2.4);
+    s += `<g class="flame">${flame(180, 82, 20, 14, 0, true, 3)}</g>` + ci(180, 84, 6.5, cel('#fff3a0', '#ff8a1f'), 3);
+    s += pa('M84,172 H276 V230 H84 Z', '#2a0a30', 3.5) + [94, 136, 224, 266].map(x => pa(`M${x - 6},230 V170 H${x + 6} V230 Z`, cel('#d6303a', '#8a1424', .7), 3) + pa(`M${x - 8},230 V223 H${x + 8} V230 Z`, '#ffd21f', 2.4)).join('');
+    s += pa('M152,176 H208 V192 H152 Z', cel('#ffd84a', '#c47a10'), 3) + pa('M158,180 H202 V188 H158 Z', '#8a1424', 0) + ln(nghSp(171, 184, 3.6, 1) + nghSp(189, 184, 3.6, -1), '#ffd21f', 1.6);
+    s += nghRoof(110, 250, 140, 36, 32, '#8a3466', '#4f1a44');
+    // Nền đình + sân gạch
+    s += pa('M56,236 V226 H304 V236 Z', cel('#9a8fc4', '#5e5296'), 3.5);
+    s += pa(`M-10,234 H370 V310 H-10 Z`, lin('#6a4a9a', '#4a3278', '#3a2464'), 3.5);
+    let g = '';
+    for (const y of [246, 262, 284]) g += `M-10,${y} H370 `;
+    for (let i = -6; i <= 6; i++) g += `M${180 + i * 34},234 L${180 + i * 80},310 `;
+    s += ln(g, '#33205a', 2) + ln('M-10,238 H370', '#8a74c4', 2, 'opacity=".5"');
+    // Cột đá đèn lửa hai bên, lư hương
+    s += nghPillar(28, 118, 262) + nghPillar(332, 118, 262);
+    s += nghCenser(70, 282) + embers(8, 107, '#ffd21f');
+    // Bục: mặt trống đồng
+    let st = '';
+    for (let i = 0; i < 14; i++) { const a0 = (i * 360 / 14) * R, a1 = ((i + .5) * 360 / 14) * R; st += (i ? 'L' : 'M') + P(180 + Math.cos(a0) * 46, 258 + Math.sin(a0) * 7.4) + 'L' + P(180 + Math.cos(a1) * 18, 258 + Math.sin(a1) * 2.9); }
+    s += platformR(cel('#f3c160', '#bb7a2c', .8), cel('#c98a3a', '#7a4818'),
+      `<g fill="none" stroke="#a8641e" stroke-linecap="round"><ellipse cx="180" cy="258" rx="86" ry="13.6" stroke-width="2"/><ellipse cx="180" cy="258" rx="72" ry="11.4" stroke-width="2.6" stroke-dasharray="0 7"/><ellipse cx="180" cy="258" rx="58" ry="9.2" stroke-width="1.8"/></g>` +
+      pa(st + 'Z', '#ffe9a0', 0) + ln(st + 'Z', '#a8641e', 1.4) + ci(180, 258, 3, '#a8641e', 0) + ln('M84,266 Q180,292 276,266', '#7a4818', 2) + `<g fill="#f3c160" stroke="#7a4818" stroke-width="1.3">${[-80, -56, -30, 0, 30, 56, 80].map(d => `<circle cx="${180 + d}" cy="${f1(274 + 8 * (1 - (d / 90) ** 2))}" r="3"/>`).join('')}</g>`);
+    return s;
+  };
+  if (typeof SCENE_NAME !== 'undefined') SCENE_NAME.ep_nghe = 'Sân đền cổ';
+})();
+
+/* ===================== CẢNH NỀN PET SỬ THI: HẠC BĂNG CỰC QUANG (ep_crane) ===================== */
+// Hồ băng dưới bầu trời cực quang: màn cực quang, trăng lưỡi liềm, núi tuyết xa, đàn hạc nhỏ bay, mặt hồ phản chiếu,
+// cây tùng phủ tuyết bên bờ (tích "tùng hạc"), cỏ băng, bục băng. viewBox 0 0 360 300, bục tâm (180, 258).
+// Cần: gfx.js (pa, ln, bl, tube, P, f1, lin, cel, crystal, spark4) và scenes.js (SCENES, SCENE_NAME, SW, skyR, starsR, ridge, flakes, platformR, rng).
+// Nạp sau scenes.js. Hàm phụ nằm trong IIFE (tiền tố crn), không thêm tên toàn cục ngoài SCENES.ep_crane và SCENE_NAME.ep_crane.
+(() => {
+  // Màn cực quang: mép trên/dưới lượn sóng, tia dọc mảnh
+  function crnCurtain(y, amp, h, cols, op, seed, cls = 'aurora') {
+    const r = rng(seed), top = [], bot = [];
+    for (let x = -20; x <= SW + 20; x += 38) { const w = Math.sin(x / 50 + seed) * amp + (r() - .5) * amp * .6; top.push([x, y + w]); bot.push([x, y + w + h * (.7 + r() * .5)]); }
+    let d = `M${P(...top[0])}`;
+    for (let i = 1; i < top.length; i++) d += ` Q${P(top[i - 1][0] + 19, top[i - 1][1] - 8)} ${P(...top[i])}`;
+    for (let i = bot.length - 1; i >= 0; i--) d += ` L${P(...bot[i])}`;
+    // tia sáng dọc bắn lên từ mép dưới sáng
+    let rays = '';
+    for (let i = 1; i < bot.length - 1; i += 2) { const x = bot[i][0] + (r() - .5) * 14, b = bot[i][1] - 4; rays += `M${f1(x)},${f1(b)} v${f1(-h * (.5 + r() * .35))} `; }
+    // lớp .aurora của app ghi đè opacity (.6 → .9) nên bọc thêm một lớp ngoài giữ độ mờ mong muốn
+    return `<g opacity="${f1(op / .75)}"><g class="${cls}" opacity=".75"><path d="${d} Z" fill="${lin(...cols)}"/>` + ln(rays, '#ffffff', 3, 'opacity=".18"') + `</g></g>`;
+  }
+  // Hạc nhỏ bay xa (nét cong đơn giản)
+  const crnBird = (x, y, k) => ln(`M${P(x - 9 * k, y - 2 * k)} Q${P(x - 4 * k, y - 6 * k)} ${P(x, y)} Q${P(x + 5 * k, y - 7 * k)} ${P(x + 11 * k, y - 4 * k)} M${P(x, y)} l${f1(6 * k)},${f1(1.5 * k)}`, '#eaf6ff', 2 * k, 'opacity=".85"');
+  // Cây tùng dáng cổ: thân cong, tán phẳng từng tầng phủ tuyết
+  function crnPine(x, y) {
+    let s = tube(`M${x},${y} C${x + 4},${y - 40} ${x - 18},${y - 64} ${x + 6},${y - 96} M${x + 2},${y - 50} Q${x + 24},${y - 58} ${x + 40},${y - 54} M${x - 6},${y - 78} Q${x - 22},${y - 84} ${x - 34},${y - 80}`, '#6a4a7a', 7, 3.5);
+    const pads = [[x + 8, y - 104, 30, 11], [x + 44, y - 58, 26, 9], [x - 36, y - 86, 22, 8], [x + 22, y - 82, 20, 8]];
+    s += bl(pads.map(([px, py, rx, ry]) => `<ellipse cx="${px}" cy="${py}" rx="${rx}" ry="${ry}"/>`).join(''), cel('#2f7f8a', '#1a4a62'), 3.5);
+    s += pads.map(([px, py, rx, ry]) => pa(`M${f1(px - rx * .9)},${f1(py - ry * .1)} Q${px},${f1(py - ry * 1.5)} ${f1(px + rx * .9)},${f1(py - ry * .1)} Q${px},${f1(py - ry * .5)} ${f1(px - rx * .9)},${f1(py - ry * .1)} Z`, '#ffffff', 0)).join('');
+    return s;
+  }
+  // Cỏ băng mọc ven hồ
+  // (gộp thành một hình + một nét sáng cho nhẹ)
+  function crnReeds(x, y, n, k = 1) {
+    let d = '', h_ = '';
+    for (let i = 0; i < n; i++) {
+      const c = i - (n - 1) / 2, h = (16 + (i % 3) * 8) * k, bx = x + c * 7 * k, tx = bx + c * 4 * k, w = 3 * k;
+      d += `M${P(bx - w, y)} L${P(tx - w * .6, y - h * .72)} L${P(tx, y - h)} L${P(tx + w * .6, y - h * .72)} L${P(bx + w, y)} Z `;
+      h_ += `M${P(bx - w * .2, y - 2)} L${P(tx - w * .15, y - h * .7)} `;
+    }
+    return pa(d, cel('#e6fbff', '#6fcff2'), 2.4) + ln(h_, '#ffffff', 1.4, 'opacity=".9"');
+  }
+
+  SCENES.ep_crane = () => {
+    let s = skyR('#070b30', '#15206a', '#2a4f9e') + starsR(26, 113, 150);
+    // màn cực quang hai lớp
+    s += crnCurtain(34, 12, 56, ['#8a5cff', '#33e1ff', '#6dffc8'], .55, 3) + crnCurtain(72, 9, 40, ['#ff6ad5', '#8a5cff', '#33e1ff'], .38, 7);
+    // trăng lưỡi liềm
+    s += `<circle cx="306" cy="44" r="24" fill="#eafcff" opacity=".12"/>` + pa('M314,24 A20,20 0 1 0 318,62 A15,15 0 1 1 314,24 Z', cel('#ffffff', '#cfe6ff'), 3);
+    // đàn hạc nhỏ bay
+    s += `<g class="drift">${crnBird(250, 92, 1.1) + crnBird(272, 104, .9) + crnBird(232, 108, .8)}</g>`;
+    // núi tuyết xa (hai lớp) + chỏm tuyết
+    s += ridge([[20, 150], [80, 118], [140, 154], [220, 112], [290, 146], [346, 124]], 214, '#34488f', 3.5);
+    s += pa('M68,126 L80,118 L94,130 L86,128 L80,136 L74,128 Z M208,120 L220,112 L234,124 L226,122 L220,130 L213,123 Z M336,130 L346,124 L356,132 L348,131 L343,137 Z', '#ffffff', 0);
+    s += ridge([[-6, 176], [60, 156], [120, 182], [190, 160], [262, 184], [330, 160]], 220, cel('#9cb6ec', '#5f78c4'), 3.5);
+    s += pa('M50,162 L60,156 L72,164 L64,166 L60,170 L55,165 Z M180,166 L190,160 L202,168 L194,169 L189,174 L185,168 Z M320,166 L330,160 L341,167 L334,168 L330,172 Z', '#ffffff', 0);
+    // mặt hồ băng: phản chiếu cực quang + vết nứt
+    s += pa('M-10,198 Q180,188 370,198 L370,250 L-10,250 Z', lin('#2a4f9e', '#5f8be0', '#9fd2f5'), 4);
+    s += `<g opacity=".67"><g class="aurora" opacity=".75">` + pa('M10,206 Q120,200 220,208 Q300,214 350,206 L350,212 Q300,220 220,214 Q120,206 10,212 Z', lin('#6dffc8', '#33e1ff'), 0) +
+      pa('M40,220 Q140,216 250,222 Q310,226 340,220 L340,224 Q300,230 250,226 Q140,220 40,224 Z', lin('#b48aff', '#ff8ae0'), 0) + `</g></g>`;
+    s += ln('M30,232 l18,-6 l14,4 M300,230 l-16,-5 l-12,4 M150,210 l20,3', '#e6f6ff', 2, 'opacity=".8"');
+    // bờ tuyết hai bên + cây tùng + cỏ băng
+    s += pa('M-10,300 L-10,206 Q40,200 86,224 Q118,240 120,300 Z', cel('#f4fbff', '#b9d6f2'), 4) + pa('M370,300 L370,210 Q326,204 288,228 Q258,246 254,300 Z', cel('#f4fbff', '#b9d6f2'), 4);
+    s += crnPine(30, 222) + crnReeds(92, 240, 4) + crnReeds(300, 236, 5, .9) + crnReeds(334, 248, 3, .8);
+    s += flakes(22, 117);
+    // bục băng: mặt ánh cực quang, viền pha lê
+    s += platformR('#e8f6ff', '#8fb4e6', `<ellipse cx="180" cy="258" rx="70" ry="10" fill="none" stroke="#6dffc8" stroke-width="2.4" opacity=".7"/><ellipse cx="180" cy="258" rx="44" ry="6" fill="none" stroke="#b48aff" stroke-width="2" opacity=".6"/>` +
+      crystal(96, 262, 16, 9, '#e6fbff', '#6fcff2', 2.6, -6) + crystal(264, 262, 14, 8, '#e6fbff', '#6fcff2', 2.6, 6) + spark4(236, 252, 4, '#ffffff', 1.4));
+    return s;
+  };
+  SCENE_NAME.ep_crane = 'Hồ băng cực quang';
+})();
+
+/* ===================== CẢNH NỀN · THANH LONG SẤM (ep_loong) =====================
+   Đỉnh núi đá vôi giữa biển mây giông, trời giông với sét xa, một ngôi tháp nhỏ trên đỉnh xa.
+   viewBox 0 0 360 300, bục đứng tâm (180, 258) như mọi cảnh trong scenes.js.
+   Cần gfx.js (pa, ci, ln, bl, f1, cel, bolt, spark4, OL) và scenes.js (SCENES, SCENE_NAME, SW, SH, rng, skyR, starsR, platformR).
+   Nạp SAU scenes.js. Hàm phụ trong khối, tiền tố lng; không thêm tên toàn cục. */
+(() => {
+  if (typeof SCENES === 'undefined') return;
+  const lngR = Math.round;
+  // Dải biển mây: hàng bướu tròn nối đáy kéo xuống hết khung, kèm nét xoắn mây lành
+  function lngSea(y, r, step, col, cold, curl, seed, cls = '') {
+    const rnd = rng(seed);
+    let c = '', d = '';
+    for (let x = -r; x <= SW + r; x += step) {
+      const rr = r * (.75 + rnd() * .5), yy = y + (rnd() - .5) * r * .5;
+      c += `<circle cx="${lngR(x)}" cy="${lngR(yy)}" r="${lngR(rr)}"/>`;
+      if (rnd() > .45) d += `M${lngR(x - rr * .3)},${lngR(yy + rr * .2)}a${lngR(rr * .32)},${lngR(rr * .32)} 0 1 1 ${lngR(rr * .45)},-${lngR(rr * .3)}`;
+    }
+    c += `<rect x="-10" y="${lngR(y)}" width="${SW + 20}" height="${SH - y + 10}"/>`;
+    return `<g${cls ? ` class="${cls}"` : ''}>` + bl(c, cel(col, cold, .55), 3) + ln(d, curl, 2.2, 'opacity=".85"') + `</g>`;
+  }
+  // Núi đá vôi trụ tròn: chân (x, base), nửa rộng w, cao h; vân đá + viền sáng bên trái + chòm thông trên đỉnh
+  function lngPeak(x, base, w, h, col, cold, rim, trees = true) {
+    const top = base - h;
+    let s = pa(`M${x - w},${base} C${x - w * 1.05},${lngR(base - h * .55)} ${lngR(x - w * .8)},${top} ${x},${top} C${lngR(x + w * .8)},${top} ${lngR(x + w * 1.05)},${lngR(base - h * .55)} ${x + w},${base} Z`, cel(col, cold, .5), 3.5);
+    s += ln(`M${lngR(x - w * .7)},${lngR(top + h * .22)} Q${lngR(x - w * .2)},${lngR(top + h * .3)} ${lngR(x + w * .3)},${lngR(top + h * .2)} M${lngR(x - w * .85)},${lngR(top + h * .5)} Q${lngR(x)},${lngR(top + h * .6)} ${lngR(x + w * .75)},${lngR(top + h * .45)}`, cold, 2.2, 'opacity=".8"');
+    s += ln(`M${lngR(x - w * .62)},${lngR(top + h * .12)} Q${lngR(x - w * .4)},${top + 3} ${lngR(x - w * .05)},${top + 2}`, rim, 2.4, 'opacity=".7"');
+    if (trees) s += bl(`<ellipse cx="${lngR(x - w * .3)}" cy="${top + 1}" rx="${lngR(w * .28)}" ry="${lngR(w * .18)}"/><ellipse cx="${lngR(x + w * .15)}" cy="${top - 2}" rx="${lngR(w * .32)}" ry="${lngR(w * .22)}"/>`, cel('#2f9a6e', '#1a5e48', .5), 2.5);
+    return s;
+  }
+  // Ngôi tháp nhỏ ba tầng (bóng tối, cửa sổ vàng) trên đỉnh núi xa
+  function lngPagoda(x, y, k) {
+    let s = '';
+    for (let i = 0; i < 3; i++) {
+      const w = (14 - i * 3.5) * k, yy = y - i * 9 * k;
+      s += pa(`M${f1(x - w * .55)},${f1(yy)} V${f1(yy - 6 * k)} H${f1(x + w * .55)} V${f1(yy)} Z`, '#1d2c5a', 2) +
+        pa(`M${f1(x - w)},${f1(yy - 5 * k)} Q${f1(x)},${f1(yy - 10 * k)} ${f1(x + w)},${f1(yy - 5 * k)} L${f1(x + w * .6)},${f1(yy - 9 * k)} H${f1(x - w * .6)} Z`, '#2a3f78', 2) +
+        `<rect x="${f1(x - 1.4 * k)}" y="${f1(yy - 4.6 * k)}" width="${f1(2.8 * k)}" height="${f1(3.4 * k)}" fill="#ffd84a"/>`;
+    }
+    return s + ln(`M${f1(x)},${f1(y - 27 * k)} V${f1(y - 34 * k)}`, '#1d2c5a', 2) + ci(x, y - 35 * k, 1.8 * k, '#ffd84a', 1.4);
+  }
+  // Tia sét xa gấp khúc có nhánh
+  function lngStrike(x, y, h, col, dl = 0) {
+    const r = rng(lngR(x * 7 + y));
+    let d = `M${x},${y}`, px = x, py = y, br = '';
+    for (let i = 1; i <= 6; i++) { px += (r() - .5) * 18; py += h / 6; d += ` L${lngR(px)},${lngR(py)}`; if (i === 3) br = `M${lngR(px)},${lngR(py)} l${lngR(10 + r() * 8)},${lngR(14 + r() * 8)} l${lngR(-4)},${lngR(10)}`; }
+    return `<g class="flick" style="animation-delay:-${dl}s">${ln(d + ' ' + br, col, 7, 'opacity=".25"')}${ln(d + ' ' + br, OL, 4.5)}${ln(d + ' ' + br, col, 2.2)}</g>`;
+  }
+  // Mây giông trên trời: khối bướu tím than
+  const lngStorm = (x, y, k, col, cold) => bl([[0, 0, 22], [-26, 8, 16], [26, 6, 18], [-48, 14, 10], [50, 14, 11], [10, -14, 16]].map(([dx, dy, r]) => `<circle cx="${lngR(x + dx * k)}" cy="${lngR(y + dy * k)}" r="${lngR(r * k)}"/>`).join('') + `<rect x="${lngR(x - 54 * k)}" y="${lngR(y + 10 * k)}" width="${lngR(108 * k)}" height="${lngR(16 * k)}" rx="${lngR(8 * k)}"/>`, cel(col, cold, .55), 3.5);
+
+  SCENES.ep_loong = () => skyR('#0b1240', '#1d2f74', '#2f6d9e') +
+    // quầng ngọc sau đỉnh núi chính
+    `<circle cx="180" cy="190" r="150" fill="#5dffc0" opacity=".08"/><circle cx="180" cy="190" r="96" fill="#33e1ff" opacity=".1"/>` +
+    starsR(14, 71, 70, '#c9fbff') +
+    // sét xa sau mây
+    lngStrike(70, 30, 110, '#fff59a') + lngStrike(296, 24, 96, '#9ff8ff', .6) + lngStrike(214, 40, 60, '#fff59a', 1.1) +
+    // mây giông dày phía trên
+    lngStorm(60, 30, 1.1, '#3e4590', '#232860') + lngStorm(300, 22, 1.2, '#3e4590', '#232860') + lngStorm(186, 6, .9, '#343b82', '#1e2356') +
+    // núi xa nhạt, tháp nhỏ trên đỉnh phải
+    lngPeak(46, 210, 30, 104, '#3a5f96', '#25406e', '#9fc4f0', false) + lngPeak(318, 206, 32, 120, '#3a5f96', '#25406e', '#9fc4f0', false) + lngPagoda(318, 87, 1) +
+    lngSea(200, 22, 30, '#7f8ad6', '#525eae', '#c9d0ff', 5, 'drift') +
+    // núi giữa
+    lngPeak(98, 236, 26, 92, '#2b6e86', '#17445e', '#8ff0e6') + lngPeak(268, 236, 30, 104, '#2b6e86', '#17445e', '#8ff0e6') +
+    lngSea(228, 20, 28, '#a3adf0', '#6f7bcc', '#e6eaff', 9, 'drift d2') +
+    // đỉnh chính: bục đá ngọc viền vàng
+    platformR('#4fc8bc', '#1f6f86', `<ellipse cx="180" cy="258" rx="84" ry="12" fill="none" stroke="#ffd84a" stroke-width="3"/>` + bolt(124, 250, 13, '#ffd84a', 2) + bolt(232, 252, 13, '#33e1ff', 2)) +
+    // mây sát chân bục
+    lngSea(282, 16, 26, '#c9d0ff', '#8e99e4', '#ffffff', 13) +
+    [[30, 120, 5], [338, 150, 5.5], [130, 96, 4], [250, 112, 4.5]].map(([x, y, r], i) => spark4(x, y, r, i % 2 ? '#33e1ff' : '#fff6b0', 1.6, 'twinkle', i * .4)).join('');
+  SCENE_NAME.ep_loong = 'Đỉnh núi biển mây giông';
+})();
+
+/* ===================== CẢNH NỀN: BẠCH TƯỢNG NGỌC (ep_elephant) ===================== */
+// Đền ngọc cổ trong hang: trần hang có tinh thể ngọc treo, tia sáng rọi xuống, tháp đá cổ phủ rêu,
+// cửa vòm tỏa sáng ngọc ngay sau bục, cụm tinh thể ngọc phát sáng, ao sen phía trước, bục đá chạm cánh sen viền vàng.
+// Nạp sau js/scenes.js (dùng SCENES, SCENE_NAME, skyR, groundR, platformR, fireflies của scenes.js và hàm vẽ của gfx.js).
+// Hàm phụ nằm trong IIFE, tiền tố elps, không thêm tên toàn cục. viewBox 0 0 360 300, bục tâm (180, 258).
+(() => {
+  const r0 = Math.round, Q = (x, y) => r0(x) + ',' + r0(y);
+  const elpsGlow = (x, y, rx, ry, col, op) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${col}" opacity="${op}"/>`;
+  const JADE = () => cel('#9dffd9', '#13916c');
+  // Tinh thể ngọc: chân (x, y), cao h, rộng w, nghiêng t; dn: treo ngược từ trần
+  const elpsGem = (x, y, h, w, t = 0, dn) => {
+    const k = dn ? 1 : -1;
+    return pa(`M${Q(x - w / 2, y)}L${Q(x - w / 2 + t * .5, y + k * h * .7)}L${Q(x + t, y + k * h)}L${Q(x + w / 2 + t * .5, y + k * h * .7)}L${Q(x + w / 2, y)}Z`, JADE(), 3) +
+      ln(`M${Q(x - w * .15 + t * .2, y + k * h * .15)}L${Q(x - w * .1 + t * .6, y + k * h * .72)}`, '#e6fff6', 2, 'opacity=".85"');
+  };
+  const elpsCluster = (x, y, k) => elpsGlow(x, r0(y - 16 * k), r0(32 * k), r0(26 * k), '#5fffc8', .22) +
+    elpsGem(x - 14 * k, y, 28 * k, 13 * k, -9 * k) + elpsGem(x + 13 * k, y, 24 * k, 12 * k, 8 * k) + elpsGem(x, y + 2, 42 * k, 17 * k);
+  // Tháp đá cổ nhiều tầng: tâm x, chân y, rộng w, cao h; rêu trên các gờ
+  const elpsTower = (x, y, w, h, c1, c2) => {
+    const b = h * .46, f = cel(c1, c2);
+    let s = pa(`M${Q(x - w / 2, y)}V${r0(y - b)}H${r0(x + w / 2)}V${r0(y)}Z`, f, 3.5) + ln(`M${Q(x - w / 2 + 6, y - b * .35)}H${r0(x + w / 2 - 6)}M${Q(x - w / 2 + 6, y - b * .7)}H${r0(x + w / 2 - 6)}`, c2, 2.5), moss = '';
+    for (let i = 0; i < 3; i++) {
+      const ww = w * (.92 - i * .2) / 2, y0 = y - b - i * h * .13, y1 = y0 - h * .13;
+      s += pa(`M${Q(x - ww - 4, y0)}H${r0(x + ww + 4)}L${Q(x + ww, y0 - 4)}L${Q(x + ww * .86, y1)}H${r0(x - ww * .86)}L${Q(x - ww, y0 - 4)}Z`, f, 3);
+      moss += `M${Q(x - ww - 4, y0)}q${r0(ww * .3)},-6 ${r0(ww * .6)},0q${r0(ww * .2)},4 ${r0(ww * .4)},1Z`;
+    }
+    const yt = y - b - h * .39;
+    return s + `<path d="${moss}" fill="#5fc86a"/>` + pa(`M${Q(x - w * .16, yt)}Q${Q(x - w * .2, yt - h * .1)} ${Q(x, y - h)}Q${Q(x + w * .2, yt - h * .1)} ${Q(x + w * .16, yt)}Z`, f, 3);
+  };
+  // Hoa sen trên lá (ao phía trước)
+  const elpsLotus = (x, y, k) => {
+    let s = el(x, y + 4 * k, 22 * k, 6 * k, cel('#5fd06a', '#1d8a45'), 3), d = '';
+    for (const [a, l] of [[-150, 14], [-120, 17], [-90, 19], [-60, 17], [-30, 14]]) {
+      const r = a * Math.PI / 180, ux = Math.cos(r), uy = Math.sin(r), w = 5.5 * k, L = l * k, q = (t, n) => Q(x + ux * L * t - uy * w * n, y + uy * L * t + ux * w * n);
+      d += `M${q(0, 0)}C${q(.1, -.7)} ${q(.72, -.7)} ${q(1, 0)}C${q(.72, .7)} ${q(.1, .7)} ${q(0, 0)}Z`;
+    }
+    return s + pa(d, lin('#ff6aa8', '#ffd0e4', '#ffffff'), 2.4) + ci(x, y - 2 * k, 3 * k, '#ffd21f', 1.8);
+  };
+  const elpsPad = (x, y, rx) => el(x, y, rx, rx * .3, cel('#4fc06a', '#1d7a45'), 2.5) + ln(`M${x},${y} l${r0(rx * .8)},${r0(-rx * .12)}`, '#1d7a45', 2);
+
+  SCENES.ep_elephant = () => {
+    let s = skyR('#081638', '#0f3a5a', '#1a6670');
+    // tia sáng rọi từ khe trần
+    s += `<path d="M150,0 L30,300 L150,300 L176,0 Z M196,0 L80,300 L180,300 L222,0 Z M230,0 L204,300 L296,300 L256,0 Z" fill="#e6fff6" opacity=".1"/>`;
+    // tháp đá cổ: hai tháp phụ hai bên, tháp chính giữa có cửa vòm ngọc sáng
+    s += elpsTower(52, 236, 62, 150, '#6f8f98', '#3e5866') + elpsTower(308, 236, 62, 150, '#6f8f98', '#3e5866') + elpsTower(180, 232, 150, 214, '#7d9ea6', '#47636f');
+    s += elpsGlow(180, 186, 96, 84, '#7dffd0', .2) + elpsGlow(180, 196, 64, 56, '#c8fff0', .3) +
+      pa('M140,234V184Q140,138 180,134Q220,138 220,184V234Z', lin('#e6fff6', '#7dffd0', '#16b97c'), 4) + ln('M140,184Q140,138 180,134Q220,138 220,184', '#ffd21f', 3.5);
+    // dây leo rủ
+    s += [[96, 20, 110], [122, 40, 70], [256, 30, 96], [292, 18, 120]].map(([x, y, h], i) => ln(`M${x},${y} q${i % 2 ? 6 : -6},${h * .5} 0,${h}`, '#2f9a3e', 3) + leaf(x, y + h * .45, 9, i % 2 ? 20 : 160, '#7be35a', '#2f9a3e', 2) + leaf(x, y + h, 10, 90, '#9df27a', '#2f9a3e', 2)).join('');
+    // trần hang + tinh thể treo
+    s += pa('M-10,-10H370V28L350,44L336,30L318,58L300,34L278,48L258,28L236,40L214,24L146,24L126,42L104,28L84,52L64,32L44,46L26,30L10,52L-10,36Z', '#0a1630', 4);
+    s += [[18, 40, 26, 10], [84, 44, 30, 11], [318, 50, 28, 11], [350, 38, 18, 8], [126, 36, 16, 7], [278, 42, 18, 8]].map(([x, y, h, w]) => elpsGem(x, y, h, w, 0, 1)).join('');
+    // nền đá, cụm ngọc, ao sen
+    s += groundR(228, '#24505a');
+    s += elpsCluster(30, 250, 1.15) + elpsCluster(332, 246, 1) + elpsGlow(98, 222, 14, 12, '#5fffc8', .25) + elpsGem(98, 232, 26, 11, -4) + elpsGlow(262, 220, 14, 12, '#5fffc8', .25) + elpsGem(262, 230, 22, 10, 4);
+    s += pa('M-10,300V278Q60,266 120,280Q140,290 132,300Z M370,300V276Q300,264 240,280Q222,290 230,300Z', lin('#3fd6c0', '#1f8a9a'), 3.5);
+    s += ln('M20,286q12,-3 24,0M78,290q10,-3 20,0M282,286q12,-3 24,0M326,292q10,-3 18,0', '#c8fff0', 2, 'opacity=".7"');
+    s += elpsPad(98, 290, 14) + elpsPad(262, 292, 13) + elpsLotus(46, 280, 1) + elpsLotus(318, 278, .9);
+    // bục đá trắng ngọc, viền vàng, chạm cánh sen
+    s += platformR('#e8f7f0', '#7fae9e', ln('M84,262Q180,282 276,262', '#ffd21f', 3.5) + pa([104, 132, 160, 188, 216, 244].map(x => `M${x},${r0(281 - Math.abs(x - 174) * .1)}q6,-12 12,0`).join(''), '#c8e8dc', 2));
+    s += fireflies(14, 97, '#9dffd9') + [[60, 120, 5], [300, 140, 4.5], [150, 90, 4], [214, 70, 3.5]].map(([x, y, r], i) => spark4(x, y, r, i % 2 ? '#fff6b0' : '#e6fff6', 1.6, 'twinkle', i * .4)).join('');
+    return s;
+  };
+  SCENE_NAME.ep_elephant = 'Đền ngọc trong hang';
+})();
+
+/* ===================== CẢNH NỀN SỬ THI · BƯỚM THẦN RỪNG: Rừng cổ thụ ánh sáng =====================
+   viewBox 0 0 360 300, bục đứng tâm (180, 258) như mọi cảnh. Nạp sau js/scenes.js (dùng skyR, groundR, fireflies, rng, SW, SH).
+   Rừng cổ thụ: thân cây xa mờ, hai cây cổ thụ rêu phủ hai bên, tán lá phía trên, tia nắng xuyên tán lá,
+   dây leo có nụ phát sáng, hoa chuông phát sáng, đom đóm, cánh hoa trôi; bục là gốc cây cổ thụ có vân gỗ. */
+(() => {
+  const bfyRay = (x0, w0, x1, w1, y1, op) => `<path d="M${x0},-4 L${x0 + w0},-4 L${x1 + w1},${y1} L${x1},${y1} Z" fill="#fff4c4" opacity="${op}"/>`;
+  // Hoa 5 cánh nhọn phát sáng (quầng mờ phía sau)
+  function bfyBloomS(x, y, r, col, glow, d = 0) {
+    let p = '';
+    for (let i = 0; i < 5; i++) {
+      const a = (i * 72 - 90) * Math.PI / 180, ux = Math.cos(a), uy = Math.sin(a), q = (k, w) => `${f1(x + ux * r * k - uy * r * w)},${f1(y + uy * r * k + ux * r * w)}`;
+      p += `M${f1(x)},${f1(y)}Q${q(.55, .62)} ${q(1, 0)}Q${q(.55, -.62)} ${f1(x)},${f1(y)}`;
+    }
+    return `<g class="twinkle" style="animation-delay:-${d}s"><circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r * 1.7)}" fill="${glow}" opacity=".32"/></g>` + bl(`<path d="${p}"/>`, col, 2.2) + ci(x, y, r * .3, '#fff6b0', 1.4);
+  }
+  // Bụi hoa phát sáng dưới gốc cây
+  function bfyBush(x, y, k, flowers) {
+    let s = bl([[0, 0, 20], [-18, 6, 14], [18, 6, 15], [-6, -12, 13], [10, -10, 12]].map(([dx, dy, r]) => `<circle cx="${f1(x + dx * k)}" cy="${f1(y + dy * k)}" r="${f1(r * k)}"/>`).join(''), cel('#2f9a5a', '#1a6040'), 3.5);
+    s += leaf(x - 20 * k, y + 4 * k, 14 * k, 200, '#4fc070', '#1a6040', 2.4) + leaf(x + 20 * k, y + 4 * k, 14 * k, -20, '#4fc070', '#1a6040', 2.4);
+    return s + flowers.map(([dx, dy, r, col, gl], i) => bfyBloomS(x + dx * k, y + dy * k, r * k, col, gl, i * .5)).join('');
+  }
+  // Cây cổ thụ rêu phủ ở mép cảnh: sd = -1 trái, 1 phải
+  function bfyTree(sd) {
+    const X = v => sd < 0 ? v : 360 - v;
+    const pts = [[-20, 0], [46, 0], [42, 80], [48, 150], [60, 200], [88, 236], [60, 232], [40, 226], [30, 240], [8, 232], [-20, 240]];
+    let d = 'M' + pts.map(([x, y]) => `${f1(X(x))},${y}`).join(' L') + ' Z';
+    let s = pa(d, cel('#7a5638', '#3e2a1c'), 4);
+    s += ln(`M${X(28)},10 Q${X(22)},90 ${X(30)},160 M${X(14)},40 Q${X(10)},110 ${X(16)},190 M${X(38)},150 Q${X(48)},190 ${X(70)},226`, '#4a3020', 3);
+    // Rêu và địa y phát sáng
+    s += pa(`M${X(43)},96 Q${X(52)},126 ${X(48)},150 L${X(44)},162 L${X(41)},150 L${X(37)},160 L${X(36)},138 Q${X(38)},114 ${X(43)},96 Z`, cel('#5ad06a', '#2f8a45'), 3);
+    s += pa(`M${X(56)},204 Q${X(72)},214 ${X(88)},236 L${X(76)},234 L${X(72)},226 L${X(66)},232 Q${X(60)},220 ${X(56)},204 Z`, cel('#5ad06a', '#2f8a45'), 3);
+    s += pa(`M${X(-20)},40 Q${X(14)},34 ${X(44)},44 L${X(42)},54 L${X(36)},50 L${X(30)},60 L${X(24)},52 L${X(14)},62 L${X(8)},52 L${X(-20)},56 Z`, cel('#5ad06a', '#2f8a45'), 3);
+    s += [[18, 60], [30, 76], [10, 92], [36, 182], [20, 200]].map(([x, y], i) => `<circle class="twinkle" style="animation-delay:-${i * .4}s" cx="${X(x)}" cy="${y}" r="2.4" fill="${i % 2 ? '#7dffcf' : '#fff3a0'}"/>`).join('');
+    // Hốc cây ánh vàng
+    s += pa(`M${X(16)},170 Q${X(22)},146 ${X(30)},170 Q${X(24)},180 ${X(16)},170 Z`, '#ffd84a', 3) + `<ellipse cx="${X(23)}" cy="166" rx="16" ry="18" fill="#ffd84a" opacity=".18"/>`;
+    return s;
+  }
+  // Dây leo rủ từ tán, nụ hồng phát sáng
+  function bfyVine(x, len, sw, seed) {
+    const r = rng(seed);
+    const d = `M${x},0 Q${x + sw},${len * .5} ${x - sw * .4},${len}`;
+    let s = ln(d, OL, 6) + ln(d, '#3fa860', 2.6);
+    for (let i = 1; i <= 2; i++) { const t = i / 2.6, yy = len * t, xx = x + sw * 2 * t * (1 - t) * 1.2 - sw * .4 * t * t; s += leaf(xx, yy, 10 + r() * 4, i % 2 ? 30 : 150, '#5fcf5a', '#2f8a45', 2.2); }
+    return s + `<g class="twinkle"><circle cx="${f1(x - sw * .4)}" cy="${len + 4}" r="8" fill="#ff8cc4" opacity=".35"/></g>` + ci(x - sw * .4, len + 4, 3.6, '#ffb3d6', 2);
+  }
+  // Gốc cây cổ thụ làm bục (vân gỗ, rêu, hoa nhỏ, nấm)
+  function bfyStump() {
+    let s = `<ellipse cx="180" cy="272" rx="110" ry="18" fill="#000" opacity=".32"/>`;
+    s += pa('M80,258 Q78,285 180,287 Q282,285 280,258 Z', cel('#8a5a34', '#4e3220'), 4);
+    s += ln('M98,266 Q100,276 104,283 M130,271 l2,14 M160,273 l1,13 M200,273 l-1,13 M232,271 l-2,13 M262,266 l-4,13', '#4e3220', 2.5);
+    s += el(180, 258, 100, 16, cel('#f0d098', '#d0a464'), 4);
+    s += [[76, 12], [52, 8.4], [28, 4.8]].map(([rx, ry]) => `<ellipse cx="182" cy="258.5" rx="${rx}" ry="${ry}" fill="none" stroke="#c0904e" stroke-width="2"/>`).join('') + ci(183, 258.5, 2.4, '#c0904e', 0);
+    s += pa('M80,258 Q82,247 104,246 Q96,254 102,262 Q90,266 80,258 Z', cel('#5ad06a', '#2f8a45'), 3) + pa('M280,258 Q278,247 256,245 Q264,254 258,262 Q270,266 280,258 Z', cel('#5ad06a', '#2f8a45'), 3);
+    s += flower(98, 247, 5, '#ff8cc4') + flower(262, 246, 5, '#fff3a0');
+    s += mushroom(252, 282, 15, '#ff5fa2');
+    return s;
+  }
+  SCENES.ep_butterfly = () => {
+    let s = skyR('#0b2836', '#175450', '#3a9474');
+    // Thân cây xa, mờ trong sương
+    s += [[52, 20], [104, 14], [140, 10], [222, 12], [262, 16], [312, 22]].map(([x, w]) => pa(`M${x - w},-5 L${x + w},-5 L${x + w * 1.2},236 L${x - w * 1.2},236 Z`, '#1a4a4e', 2.5)).join('');
+    s += `<rect y="150" width="360" height="90" fill="#7dffcf" opacity=".08"/>`;
+    // Tia nắng xuyên tán lá (lung linh nhẹ)
+    s += `<ellipse cx="178" cy="-6" rx="70" ry="40" fill="#fff4c4" opacity=".22"/><ellipse cx="178" cy="-6" rx="40" ry="22" fill="#fffbe0" opacity=".35"/>`;
+    s += `<g class="aurora">${bfyRay(146, 30, 116, 96, 270, .24)}${bfyRay(206, 22, 196, 82, 270, .2)}${bfyRay(88, 16, 36, 50, 230, .12)}${bfyRay(262, 14, 286, 50, 230, .1)}</g>`;
+    // Cây cổ thụ hai bên
+    s += bfyTree(-1) + bfyTree(1);
+    // Tán lá phía trên
+    s += bl([[0, 6, 34], [40, -4, 30], [86, 10, 26], [120, -2, 22], [240, -2, 24], [276, 10, 28], [318, -4, 32], [360, 8, 34]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join(''), '#1d7350', 3.5);
+    s += bl([[16, 28, 18], [62, 22, 16], [100, 30, 14], [262, 28, 15], [300, 24, 17], [344, 30, 18]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join(''), '#2f9a62', 3);
+    s += [[12, 22], [58, 16], [296, 18], [340, 24]].map(([x, y]) => hl(x, y, 7, 3, -20, .25)).join('');
+    // Dây leo rủ
+    s += bfyVine(72, 96, 8, 3) + bfyVine(116, 58, -6, 5) + bfyVine(250, 70, 7, 7) + bfyVine(292, 104, -8, 9);
+    // Mặt đất rêu + cỏ
+    s += groundR(232, '#2f7a50');
+    s += ln('M14,262 l4,-12 l3,10 M34,272 l3,-10 l4,9 M322,266 l4,-12 l3,10 M342,276 l3,-10 l4,9 M64,284 l4,-10 l3,8 M296,286 l3,-10 l4,8', '#1d5a3a', 3);
+    // Bụi hoa phát sáng
+    s += bfyBush(40, 246, 1.1, [[-12, -4, 8.5, '#ff8cc4', '#ff8cc4'], [9, -14, 7.5, '#7dffcf', '#7dffcf'], [14, 6, 6.5, '#fff3a0', '#ffd84a']]);
+    s += bfyBush(322, 248, 1.15, [[12, -6, 8.5, '#7dffcf', '#7dffcf'], [-9, -14, 7.5, '#ff8cc4', '#ff8cc4'], [-14, 6, 6.5, '#ffb3d6', '#ff8cc4']]);
+    s += flower(18, 280, 5, '#ff5fa2') + flower(346, 284, 5, '#ffd21f') + flower(84, 290, 4, '#7dffcf');
+    // Đom đóm, phấn hoa, cánh hoa trôi
+    s += fireflies(9, 97, '#e8ff7a') + fireflies(5, 131, '#fff3a0');
+    s += [[60, 120, 20], [150, 60, -30], [228, 110, 40], [300, 150, -10], [110, 180, 60]].map(([x, y, a], i) => `<g class="drift${i % 2 ? ' d2' : ''}">${pa(`M${x},${y} q5,-6 11,-2 q-4,7 -11,2 Z`, i % 2 ? '#ffe27a' : '#ffb3d6', 2, `transform="rotate(${a} ${x} ${y})"`)}</g>`).join('');
+    return s + bfyStump();
+  };
+  SCENE_NAME.ep_butterfly = 'Rừng cổ thụ ánh sáng';
+})();
+
+/* ===================== CẢNH NỀN SỬ THI · CÁ VOI NGÂN HÀ: Biển sao ngân hà =====================
+   Định dạng như js/scenes.js: SCENES.ep_whale() trả chuỗi SVG nền (viewBox 0 0 360 300, bục tâm 180,258), SCENE_NAME.ep_whale.
+   Nạp SAU scenes.js. Hàm phụ trong IIFE, tiền tố whl; dùng lại skyR, starsR, moonR, platformR, rng, SW, SH của scenes.js và lõi gfx.js. */
+(() => {
+  const whlR = (x, y, a) => `transform="rotate(${a} ${x} ${y})"`;
+  // Dải ngân hà chéo trời: các lớp mờ cắt gắt + bụi sao dày + vệt bụi tối
+  function whlMilky() {
+    const band = (w, col, op) => `<path d="M-20,${232 - w} C70,${170 - w} 160,${120 - w} 380,${30 - w} L380,${30 + w} C160,${120 + w} 70,${170 + w} -20,${232 + w} Z" fill="${col}" opacity="${op}"/>`;
+    let s = band(46, '#8a6cff', .16) + band(30, '#ff9ef0', .13) + band(16, '#bff8ff', .16) + band(6, '#ffffff', .18);
+    s += pa('M40,186 C90,160 130,146 170,128 C150,142 110,158 60,184 Z M210,100 C250,84 290,70 330,56 C300,72 262,86 220,104 Z', '#1a0e4a', 0, 'opacity=".45"');
+    const r = rng(907); let d = ''; for (let i = 0; i < 40; i++) { const t = r(), x = -10 + t * 380, y = 228 - t * 200 + (r() - .5) * 52; d += `M${Math.round(x)},${Math.round(y)}h0`; }
+    s += `<path d="${d}" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/>`;
+    return s;
+  }
+  // Hành tinh vành đai
+  function whlRinged(x, y, r) {
+    const ring = f => `M${x - r * 1.9},${y} A${r * 1.9},${f1(r * .5)} 0 0 ${f} ${x + r * 1.9},${y}`;
+    return `<g ${whlR(x, y, -14)}>` + ln(ring(1), OL, 7) + ln(ring(1), '#ffd9a8', 3.4) + ci(x, y, r, cel('#ff9ec8', '#b0428a'), 3.5) +
+      ln(`M${x - r * .9},${y - r * .3} Q${x},${y - r * .1} ${x + r * .9},${y - r * .35} M${x - r * .8},${y + r * .4} Q${x},${y + r * .55} ${x + r * .85},${y + r * .35}`, '#ffd6ea', 2.4, 'opacity=".7"') +
+      ln(ring(0), OL, 7) + ln(ring(0), '#ffd9a8', 3.4) + `</g>` + hl(x - r * .4, y - r * .45, r * .3, r * .16, -25, .6);
+  }
+  // Cá voi nhỏ xa xa (bóng tím) có tia phun
+  const whlFarWhale = (x, y, k) => `<g class="drift d2" opacity=".75"><path transform="translate(${x} ${y}) scale(${k})" d="M-22,2 C-22,-10 -8,-14 4,-10 C14,-7 20,-2 26,-8 L32,-16 L30,-6 L38,-4 L28,0 C22,6 10,10 -4,10 C-16,10 -22,8 -22,2 Z" fill="#3a2a8e" stroke="${OL}" stroke-width="${f1(3 / k)}" stroke-linejoin="round"/>` +
+    ln(`M${x - 8 * k},${y - 13 * k} q-1,-6 0,-9 M${x - 8 * k},${y - 18 * k} q-4,-3 -6,-1 M${x - 8 * k},${y - 18 * k} q4,-3 6,-1`, '#bff8ff', 1.6, 'opacity=".8"') + `</g>`;
+  // Biển sao: mặt nước tím than, gợn sóng sáng, bóng trăng và sao phản chiếu
+  function whlSea() {
+    let s = pa('M-10,206 Q90,198 180,204 Q270,210 370,202 L370,310 L-10,310 Z', lin('#2c1e86', '#1a1260', '#120c44'), 4);
+    s += ln('M-10,218 Q20,213 50,218 T110,218 T170,218 M200,224 Q230,219 260,224 T320,224 T380,224 M10,240 Q40,235 70,240 T130,240 M240,246 Q270,241 300,246 T360,246', '#7fe8ff', 2.2, 'opacity=".55"');
+    s += ln('M40,262 Q70,257 100,262 M260,270 Q290,265 320,270', '#ff9ef0', 2, 'opacity=".5"');
+    s += ln('M52,214 h22 M46,226 h34 M54,238 h18 M48,250 h28', '#fff4d6', 2.6, 'opacity=".45"');
+    const r = rng(911); for (let i = 0; i < 7; i++) s += spark4(r() * SW, 214 + r() * 76, 1.6 + r() * 2.2, i % 3 ? '#ffffff' : '#bff8ff', 0, i % 2 ? 'twinkle' : '', f1(r() * 2));
+    return s;
+  }
+  SCENES.ep_whale = () => skyR('#08051f', '#1c0f58', '#3a1f8e') + whlMilky() + starsR(22, 913, 200) + moonR(62, 66, 30, '#f2ecff') +
+    whlRinged(304, 92, 18) + ci(252, 38, 6, cel('#bff8ff', '#33a8e0'), 2.5) + ci(118, 34, 3.4, '#ffd36a', 2) + whlFarWhale(318, 170, .72) +
+    `<g class="twinkle">${spark4(214, 58, 7, '#fffbe0', 2)}</g>` + `<g class="twinkle" style="animation-delay:-.8s">${spark4(26, 150, 5, '#ffd6fb', 1.8)}</g>` +
+    `<path d="M330,22 L268,46 L270,50 Z" fill="#bff8ff" opacity=".6"/>` + spark4(330, 22, 5, '#ffffff', 0) +
+    whlSea() + platformR('#5a48c8', '#2e2382', ln('M98,258 A82,12 0 0 0 262,258 A82,12 0 0 0 98,258', '#7fe8ff', 2, 'opacity=".7" stroke-dasharray="3 7"') +
+      ln('M128,256 L150,251 L172,257 L196,250 L222,255', '#bff8ff', 1.4, 'opacity=".8"') + [[128, 256], [150, 251], [172, 257], [196, 250], [222, 255]].map(([x, y], i) => spark4(x, y, i % 2 ? 2.6 : 3.4, '#ffffff', 0)).join(''));
+  SCENE_NAME.ep_whale = 'Biển sao ngân hà';
+})();
+
+/* ===================== CẢNH NỀN SỬ THI: Ngựa Sắt Thánh Gióng (ep_ironhorse) ===================== */
+// Núi Sóc lúc hoàng hôn rực đỏ, mặt trời hoa văn trống đồng, khói lửa, khóm tre ngà cháy sém, bục là mặt trống đồng.
+// Cần: gfx.js (pa, el, ci, ln, hl, bl, P, f1, cel, lin, flame, OL) và scenes.js (SCENES, SCENE_NAME, SW, SH, skyR, ridge, groundR, embers).
+// Đặt sau scenes.js. Hàm phụ nằm trong IIFE, tiền tố ihs, không thêm tên toàn cục. viewBox 0 0 360 300, bục tâm (180, 258).
+(() => {
+  const R = Math.PI / 180, Pi = (x, y) => Math.round(x) + ',' + Math.round(y);
+  // Vòng tròn / elip dẹt (k = tỉ lệ dọc) làm subpath
+  const ihsRing = (cx, cy, r, k = 1) => `M${Pi(cx - r, cy)}a${f1(r)},${f1(r * k)} 0 1 0 ${f1(2 * r)},0a${f1(r)},${f1(r * k)} 0 1 0 ${f1(-2 * r)},0`;
+  // Hoa văn mặt trống đồng (mặt trời n tia, vành, vòng tròn tiếp tuyến), nhìn nghiêng theo tỉ lệ dọc k
+  function ihsDrumFace(cx, cy, r, k, col, w = 2, n = 14, lite = false) {
+    let star = '', tan = '', dots = '', zig = '';
+    for (let i = 0; i < n; i++) {
+      const a = (i * 360 / n - 90) * R, d = 180 / n * R * .6, r0 = r * .14, r1 = r * .42;
+      star += `M${Pi(cx + r0 * Math.cos(a - d), cy + r0 * k * Math.sin(a - d))}L${Pi(cx + r1 * Math.cos(a), cy + r1 * k * Math.sin(a))}L${Pi(cx + r0 * Math.cos(a + d), cy + r0 * k * Math.sin(a + d))}Z`;
+    }
+    for (let i = 0; i < 16; i++) {
+      const a = i * 22.5 * R, b = a + 22.5 * R, rr = r * .7, cr = r * .06, x = cx + rr * Math.cos(a), y = cy + rr * k * Math.sin(a);
+      tan += ihsRing(x, y, cr, k) + `M${Pi(x + cr * Math.cos(a), y + cr * k * Math.sin(a))}L${Pi(cx + (rr - cr) * Math.cos(b), cy + (rr - cr) * k * Math.sin(b))}`;
+      dots += `M${Pi(x, y)}h.1`;
+    }
+    if (!lite) for (let i = 0; i <= 64; i++) { const a = i * 180 / 32 * R, rr = r * (i % 2 ? .97 : .89); zig += (i ? 'L' : 'M') + Pi(cx + rr * Math.cos(a), cy + rr * k * Math.sin(a)); }
+    return pa(star + ihsRing(cx, cy, r * .14, k), col, 0) + ln(ihsRing(cx, cy, r * .5, k) + ihsRing(cx, cy, r * .58, k) + ihsRing(cx, cy, r * .86, k) + zig + tan, col, w) + ln(dots, col, w * 2);
+  }
+  // Tre ngà: gốc (x, y), cao h, nghiêng lean (độ, + sang phải), rộng w; lá ở các tỉ lệ; burn = cao ngọn lửa ở ngọn
+  function ihsStalk(x, y, h, lean, w, leaves = [], burn = 0) {
+    const ux = Math.sin(lean * R), uy = -Math.cos(lean * R), nx = -uy * w / 2, ny = ux * w / 2, x1 = x + ux * h, y1 = y + uy * h;
+    let s = pa(`M${Pi(x - nx, y - ny)}L${Pi(x1 - nx, y1 - ny)}L${Pi(x1 + nx + ux * w * 1.5, y1 + ny + uy * w * 1.5)}L${Pi(x + nx, y + ny)}Z`, cel('#ffe27a', '#d9a02a', .55), 3);
+    s += ln(`M${Pi(x + nx * .5, y + ny * .5)}L${Pi(x1 + nx * .5, y1 + ny * .5)}`, '#8fc23a', 1.6);
+    let nodes = '';
+    for (let t = 34; t < h - 6; t += 34) nodes += `M${Pi(x + ux * t - nx * 1.2, y + uy * t - ny * 1.2)}L${Pi(x + ux * t + nx * 1.2, y + uy * t + ny * 1.2)}`;
+    s += ln(nodes, OL, 6) + ln(nodes, '#c98e1e', 2.4);
+    s += leaves.map(([t, a, l]) => {
+      const px = x + ux * h * t, py = y + uy * h * t;
+      return pa([-30, 0, 28].map(da => { const c = Math.cos((a + da) * R), si = Math.sin((a + da) * R), ll = l * (da ? .78 : 1); return `M${Pi(px, py)}Q${Pi(px + c * ll * .45 - si * ll * .3, py + si * ll * .45 + c * ll * .3)} ${Pi(px + c * ll, py + si * ll)}Q${Pi(px + c * ll * .45 + si * ll * .14, py + si * ll * .45 - c * ll * .14)} ${Pi(px, py)}Z`; }).join(''), cel('#c8e04a', '#7fae2a'), 2.2);
+    }).join('');
+    if (burn) s += `<g class="flame" style="animation-delay:-${f1(x % 7 / 10)}s">` + flame(x1 + ux * 4, y1 + uy * 4, burn, burn * .6, 2, true, 3) + `</g>`;
+    return s;
+  }
+  // Cột khói mảnh uốn lượn bốc lên từ thung lũng
+  const ihsSmoke = (x, y, h, op = .55) => `<g class="drift d2" opacity="${op}">` + pa(`M${x - 8},${y} C${x - 14},${y - h * .3} ${x + 10},${y - h * .45} ${x - 2},${y - h * .7} C${x - 10},${y - h * .85} ${x + 6},${y - h} ${x + 14},${y - h} C${x + 6},${y - h * .9} ${x + 8},${y - h * .8} ${x + 12},${y - h * .68} C${x + 22},${y - h * .45} ${x + 2},${y - h * .3} ${x + 10},${y} Z`, '#8e4a7a', 2.5) + `</g>`;
+  // Mái đền cong trên đỉnh núi
+  const ihsShrine = (x, y) => pa(`M${x - 7},${y} V${y - 6} H${x + 7} V${y} Z M${x - 13},${y - 5} Q${x - 6},${y - 7} ${x - 4},${y - 12} H${x + 4} Q${x + 6},${y - 7} ${x + 13},${y - 5} Q${x + 15},${y - 8} ${x + 15},${y - 10} Q${x + 8},${y - 9} ${x + 5},${y - 14} H${x - 5} Q${x - 8},${y - 9} ${x - 15},${y - 10} Q${x - 15},${y - 8} ${x - 13},${y - 5} Z`, '#2e0a28', 2) + `<rect x="${x - 2}" y="${y - 5}" width="4" height="5" fill="#ffb21f"/>`;
+  // Lửa cháy sát đất
+  const ihsGroundFire = (x, y, n, h) => `<g class="flame">` + Array.from({ length: n }, (_, i) => flame(x + i * h * .55, y + (i % 2) * 2, h * (i % 2 ? .7 : 1), h * .6, (i % 3 - 1) * 2, !(i % 2), 3)).join('') + `</g>`;
+
+  SCENES.ep_ironhorse = () => {
+    let s = skyR('#2a0b3a', '#8e1c40', '#ff5a2a', '#ffc04a');
+    // mặt trời hoa văn trống đồng trên đỉnh, xoay rất chậm
+    s += `<circle cx="180" cy="84" r="86" fill="#ffd27a" opacity=".12"/><circle cx="180" cy="84" r="66" fill="#ffd27a" opacity=".18"/>`;
+    s += ci(180, 84, 50, 'url(#gSun)', 4) + `<g class="spin-slow" style="transform-origin:180px 84px">${ihsDrumFace(180, 84, 46, 1, '#e8901f', 1.8)}</g>`;
+    // vệt mây hoàng hôn
+    s += `<g class="drift">` + ln([[54, 52, 1], [76, 40, .8], [292, 58, .9], [312, 46, .7]].map(([x, y, k]) => `M${x},${y} q${f1(5 * k)},${f1(-6 * k)} ${f1(11 * k)},0 q${f1(5 * k)},${f1(-6 * k)} ${f1(11 * k)},0`).join(''), '#3a0f30', 2.6) + `</g>`;
+    // dãy núi xa, khói, núi Sóc có đền trên đỉnh
+    s += ridge([[20, 172], [80, 156], [140, 178], [220, 166], [290, 150], [350, 172]], 240, '#8a2850', 3);
+    s += ihsSmoke(138, 182, 70) + ihsSmoke(232, 176, 84);
+    s += pa('M-10,240 L-10,150 Q24,126 54,116 L74,100 Q86,92 98,104 L120,128 Q140,148 160,176 L176,240 Z', cel('#5a1848', '#3a0f36'), 4) + ln('M-6,148 Q24,126 54,116 L74,100 Q86,92 98,104 L114,122', '#ff8a4a', 2.6, 'opacity=".9"') + ihsShrine(86, 97);
+    s += pa('M370,240 L370,140 Q336,128 310,138 Q290,128 270,150 Q248,170 230,200 L214,240 Z', cel('#5a1848', '#3a0f36'), 4) + ln('M366,140 Q336,128 310,138 Q290,128 270,150 Q258,160 248,172', '#ff8a4a', 2.6, 'opacity=".9"');
+    s += groundR(220, '#3a1030') + ln('M20,244 l22,6 l14,-3 M300,240 l-16,8 l-18,-2 M70,284 l20,-5 M262,282 l18,4', '#ff6a2a', 2.6, 'opacity=".85"');
+    // khóm tre ngà hai bên, lửa cháy dưới gốc
+    s += ihsGroundFire(6, 236, 4, 22) + ihsGroundFire(300, 238, 4, 22);
+    s += ihsStalk(16, 252, 176, -5, 10, [[.6, 196, 26], [.92, -16, 24]]) + ihsStalk(42, 258, 134, 7, 9, [[.8, -20, 24]]) + ihsStalk(64, 264, 90, 15, 8, [[.82, 8, 20]]);
+    s += ihsStalk(344, 254, 180, 5, 10, [[.58, -16, 26], [.92, 200, 24]]) + ihsStalk(320, 260, 130, -8, 9, [[.8, 202, 24]]) + ihsStalk(298, 266, 88, -16, 8, [[.8, 172, 20]]);
+    s += embers(10, 1307, '#ffd21f');
+    // bục là mặt trống đồng
+    s += `<ellipse cx="180" cy="272" rx="106" ry="18" fill="#000" opacity=".3"/>` + pa('M80,258 L84,276 Q180,292 276,276 L280,258 Z', cel('#e0913f', '#9c521c'), 4) +
+      ln('M86,268 Q180,282 274,268', '#ffd27a', 2, 'opacity=".7"') + ln('M110,264 v14 M145,267 v16 M180,268 v16 M215,267 v16 M250,264 v14', '#7a3c12', 2.2) +
+      el(180, 258, 100, 16, cel('#ffd86a', '#e0a030'), 4) + ihsDrumFace(180, 258, 92, .16, '#b8641e', 1.6, 12, true) + hl(140, 252, 24, 3, 0, .35);
+    return s;
+  };
+  SCENE_NAME.ep_ironhorse = 'Núi Sóc hoàng hôn';
+})();
+/* ---------- HẾT SỬ THI ---------- */
+
+/* ----- Cảnh tạm cho pet Sử thi chưa có cảnh riêng: điện Sử thi dưới bầu trời sao ----- */
+(function () {
+  const SKY = { fire: ['#2a0a2e', '#8a1f3a', '#ff8a3d'], ice: ['#0b1a4a', '#2a6ad6', '#bff4ff'], thunder: ['#1a1450', '#4a3fae', '#ffd84a'], stone: ['#2a1a10', '#7a5232', '#e0b07a'],
+    forest: ['#0a2a1a', '#1f7a45', '#9df27a'], shadow: ['#0a0520', '#2a1260', '#8a5cff'], metal: ['#10142a', '#3d4c70', '#c9d4e6'] };
+  const epicScene = elm => () => {
+    const cols = ['#ff4d4d', '#ff9a1f', '#ffe14d', '#3fe06a', '#33b5ff', '#8a5cff'];
+    return skyR(...SKY[elm]) + starsR(30, 7 + elm.length, 170) +
+      `<g opacity=".85"><path d="M30,240 A150,150 0 0 1 330,240" fill="none" stroke="${OL}" stroke-width="40"/>` + cols.map((c, i) => `<path d="M${32 + i * 6},240 A${148 - i * 6},${148 - i * 6} 0 0 1 ${328 - i * 6},240" fill="none" stroke="${c}" stroke-width="6.5"/>`).join('') + `</g>` +
+      [70, 290].map(x => pa(`M${x - 13},262 V150 H${x + 13} V262 Z`, cel('#fff6e0', '#e0a050'), 4) + pa(`M${x - 19},150 H${x + 19} V138 H${x - 19} Z`, 'url(#gGold)', 3.5) + `<g class="twinkle">${spark4(x, 124, 8, '#fff6b0', 2)}</g>`).join('') +
+      groundR(232, SKY[elm][1]) + platformR('url(#gGold)', '#d48700', pa(starPath(180, 258, 12, 5), '#fff6b0', 2.5));
+  };
+  ECON.epics.forEach(([id, el]) => { if (!SCENES[id]) SCENES[id] = epicScene(el); if (!SCENE_NAME[id]) SCENE_NAME[id] = 'Điện Sử thi'; });
+})();
