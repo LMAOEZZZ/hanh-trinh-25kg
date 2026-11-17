@@ -36,6 +36,12 @@ function migrate(o) {
     if (!p.eq || typeof p.eq !== 'object') p.eq = {};
   });
   if (s.sel && !s.pets[s.sel]) s.sel = null;
+  // Bản 5: pet thường có thứ tự nở o (định giá tiến hóa). Pet từ bản cũ (chưa có o) xếp theo thứ tự mở cũ,
+  // đánh dấu L để giữ giá bản 4 nếu rẻ hơn; dạng, thịt, đồ giữ nguyên. Trứng bù tính từ số ngày đã chốt (xem derive).
+  const used = new Set();
+  PETS.forEach(p => { const st = s.pets[p.id]; if (st && Number.isInteger(st.o) && st.o >= 0 && !used.has(st.o)) used.add(st.o); else if (st) delete st.o; });
+  let k = 0;
+  PETS.forEach(p => { const st = s.pets[p.id]; if (!st || st.o != null) return; while (used.has(k)) k++; st.o = k; st.L = 1; used.add(k); MIGRATED = true; });
   // Bản 4: vòng quay bắt đầu từ 0 cho dữ liệu cũ; đồ độc quyền chỉ giữ món có thật
   gachaSanitize(s);
   s.v = 2;
@@ -61,11 +67,11 @@ function fromV1(s, o) {
   // 3. Pet: mở theo tổng ngày đã chốt, giữ cấp cũ nếu trùng loài
   s.pets = {};
   const D = derive();
-  PETS.forEach(p => { if (D.total >= p.need) s.pets[p.id] = { f: 1, m: Math.min(hatchGift(p.i), evoCost(p.i, 1) - 1), eq: {} }; });
+  PETS.slice(0, ECON.evoV4.n).forEach(p => { if (D.total >= 1 + 3 * p.i) s.pets[p.id] = { f: 1, m: Math.min(Math.round(2 + .4 * p.i), evoCostV4(p.i, 1) - 1), eq: {}, o: p.i, L: 1 }; });
   Object.keys(v1Pets).forEach(id => {
     const old = v1Pets[id], st = s.pets[id]; if (!st || !old) return;
     const target = old.lv >= 5 ? 4 : old.lv >= 4 ? 3 : old.lv >= 2 ? 2 : 1;
-    while (st.f < target) { const c = evoCost(PET_BY[id].i, st.f) - st.m; s.food = Math.max(0, s.food - c); st.f++; st.m = 0; }
+    while (st.f < target) { const c = costOf(id, st.f, st) - st.m; s.food = Math.max(0, s.food - c); st.f++; st.m = 0; }
   });
   if (o.badges) s.badgesV1 = o.badges;
   delete s.badges; s.ach = {}; s.seen = {}; s.own = s.own || {};
@@ -233,14 +239,16 @@ function derive() {
   r.latestDate = wds[wds.length - 1] || null;
   r.latest = r.latestDate ? state.w[r.latestDate] : null;
   r.lost = r.latest != null ? Math.max(0, +(state.startWeight - r.latest).toFixed(1)) : 0;
-  r.pets = PETS.filter(p => state.pets[p.id]).length; // chỉ đếm 28 pet thường (thành tựu Mở N pet)
+  r.pets = PETS.filter(p => state.pets[p.id]).length; // chỉ đếm pet thường (thành tựu Nở N pet)
+  r.eggs = eggsEarned(r.total); // số trứng đáng nhận theo số ngày đã chốt
+  r.nest = Math.max(0, Math.min(NPETS, r.eggs) - r.pets); // trứng đang chờ nở trong ổ
   return r;
 }
 
 /* ===================== KINH TẾ ===================== */
 const owned = id => !!(state.own[id] || state.decor[id]);
 function achMetric(kind, D) {
-  const P = PETS.map(p => state.pets[p.id]).filter(Boolean);
+  const OWN = PETS.filter(p => state.pets[p.id]), P = OWN.map(p => state.pets[p.id]);
   switch (kind) {
     case 'total': return D.total; case 'streak': return D.best;
     case 'lift': case 'heavy': case 'abs': case 'water': case 'food': case 'steps': case 'measure': case 'refeed': return D.cnt[kind];
@@ -254,6 +262,9 @@ function achMetric(kind, D) {
     case 'weighrun': return D.runWeigh; case 'sleeprun': return D.runSleep;
     case 'spin': return state.gacha.n; case 'spinrun': return spinRun(); case 'epic': return epicOwnedN();
     case 'ep4': return EPICS.filter(p => state.pets[p.id] && state.pets[p.id].f >= 4).length;
+    case 'srare': return OWN.filter(p => p.rar >= 2).length; case 'legend': return OWN.filter(p => p.rar === 3).length;
+    case 'elall': return new Set(OWN.map(p => p.el)).size;
+    case 'elfull': return Object.keys(ELEMENTS).filter(e => PETS.every(p => p.el !== e || state.pets[p.id])).length;
   }
   return 0;
 }
@@ -276,18 +287,38 @@ function rewardItem(ds, k) {
   R[k] = 1; state.food += m; state.coins += ECON.item.coin;
   return [m, ECON.item.coin];
 }
-// Mở pet theo tổng ngày đã chốt; pet mới nở kèm thịt nạp sẵn
-function syncPets(D) {
-  const fresh = [];
-  PETS.forEach(p => { if (D.total >= p.need && !state.pets[p.id]) { state.pets[p.id] = { f: 1, m: Math.min(hatchGift(p.i), evoCost(p.i, 1) - 1), eq: {} }; fresh.push(p); } });
-  return fresh;
+/* ----- Nở trứng (bản 5): rút có trọng số theo độ hiếm trong các pet thường chưa có (rút không hoàn lại) -----
+   Kết quả ghi ngay vào dữ liệu trước khi chạy hiệu ứng, nên tải lại trang giữa chừng không rút lại. */
+function pickEgg() {
+  const left = PETS.filter(p => !state.pets[p.id]); if (!left.length) return null;
+  const W = ECON.hatchW, tot = left.reduce((a, p) => a + W[p.rar], 0);
+  let r = Math.random() * tot;
+  for (const p of left) { r -= W[p.rar]; if (r < 0) return p; }
+  return left[left.length - 1];
 }
-const curPetId = () => state.sel && state.pets[state.sel] ? state.sel : ([...PETS].reverse().find(p => state.pets[p.id]) || {}).id || null;
+const nextOrder = () => PETS.reduce((m, p) => { const st = state.pets[p.id]; return st && st.o >= 0 ? Math.max(m, st.o + 1) : m; }, 0);
+function hatchEgg() {
+  const D = derive(); if (D.nest < 1) return null;
+  const p = pickEgg(); if (!p) return null;
+  const o = nextOrder(), [g, bar, rest] = hatchGift(o, p.rar);
+  state.pets[p.id] = { f: 1, m: bar, eq: {}, o, t: Date.now() };
+  state.food += rest; delete state.seen[p.id];
+  const nb = checkAch();
+  persist(); store.now();
+  return { p, o, g, bar, rest, nb, left: derive().nest };
+}
+// Pet đang chọn, không thì con nở gần nhất
+const curPetId = () => {
+  if (state.sel && state.pets[state.sel]) return state.sel;
+  let best = null, bo = -1;
+  PETS.forEach(p => { const st = state.pets[p.id]; if (st && (st.o ?? 0) >= bo) { bo = st.o ?? 0; best = p.id; } });
+  return best || (EPICS.find(p => state.pets[p.id]) || {}).id || null;
+};
 
 /* ===================== GIAO DIỆN ===================== */
 const TABS = ['today', 'calendar', 'pets', 'weight', 'badges'];
 const TAB_NAME = { today: 'Hôm nay', calendar: 'Lịch', pets: 'Pet', weight: 'Cân', badges: 'Thành tựu' };
-const ui = { tab: 'today', back: false, open: {}, qShift: 0, calMonth: null, pop: null, petView: 'camp', shopCat: 'wear', pet: null, slot: 'head' };
+const ui = { tab: 'today', back: false, open: {}, qShift: 0, calMonth: null, pop: null, petView: 'camp', shopCat: 'wear', pet: null, slot: 'head', campX: null };
 
 function renderTop(D) {
   $('#top').innerHTML = `<div class="top-row">
@@ -301,7 +332,7 @@ function renderTop(D) {
   </div>`;
 }
 function renderNav() {
-  const unseen = ALL_PETS.some(p => state.pets[p.id] && !state.seen[p.id]) || hasSpin();
+  const D = derive(), unseen = ALL_PETS.some(p => state.pets[p.id] && !state.seen[p.id]) || hasSpin(D) || D.nest > 0;
   $('#nav').innerHTML = `<div class="bar-in">${TABS.map(t => `<button class="nb" data-act="nav" data-tab="${t}" ${ui.tab === t ? 'aria-current="page"' : ''}>${NAV_ICONS[t]()}${t === 'pets' && unseen ? '<span class="dot"></span>' : ''}<span>${TAB_NAME[t]}</span></button>`).join('')}</div>`;
 }
 function render() {
@@ -310,7 +341,7 @@ function render() {
   const v = $('#view');
   v.innerHTML = ui.tab === 'today' ? nudgeHTML() + viewToday(D) : ui.tab === 'calendar' ? viewCal(D) : ui.tab === 'pets' ? viewPets(D) : ui.tab === 'weight' ? viewWeight(D) : viewBadges(D);
   if (ui.tab === 'weight') bindChart();
-  if (ui.tab === 'pets') lazyPets();
+  if (ui.tab === 'pets') { lazyPets(); campLazy(); }
   if (ui.pop) { const el = document.querySelector(ui.pop); if (el) { el.classList.remove('bounce'); void el.offsetWidth; el.classList.add('bounce'); } ui.pop = null; }
   if (ui.pet && $('#petview')) renderPetView();
   flushCel();
@@ -341,6 +372,7 @@ function viewToday(D) {
   if (ui.back) h += `<div class="card banner info" style="margin-top:14px"><p>${isCommitted(D.Y) ? 'Đang xem hôm qua. Tích nốt mục phụ để mở lượt quay bù.' : 'Đang chốt bù cho hôm qua.'}</p><button class="btn sm" data-act="back-off">Về hôm nay</button></div>`;
   else if (spinStatus(D.Y, D).ok) h += `<div class="card banner gx-banner" style="margin-top:14px"><p>Hôm qua còn 1 lượt quay bù.</p><button class="btn sm" data-act="gx-open">${ic('wheel', 'i-btn')} Quay bù</button></div>`;
   else if (diff(state.startDate, D.Y) >= 0 && !isCommitted(D.Y) && !D.shieldDays[D.Y]) h += `<div class="card banner" style="margin-top:14px"><p>Hôm qua chưa chốt. Còn kịp chốt bù tới hết hôm nay.</p><button class="btn sm" data-act="back-on">Chốt bù</button></div>`;
+  if (D.nest > 0 && !ui.back) h += `<div class="card banner egg-banner" style="margin-top:14px"><span class="eb-egg">${eggSVG()}</span><p>${D.nest === 1 ? 'Có 1 trứng chờ nở.' : `Có ${D.nest} trứng chờ nở.`}</p><button class="btn sm" data-act="hatch-open">${ic('egg', 'i-btn')} Nở</button></div>`;
   if (after && !ui.back) h += `<div class="card" style="margin-top:14px;background:linear-gradient(160deg,#ffb21f,#ff4d6a)"><div class="h2 tout">Đã qua 84 ngày!</div><p style="margin:6px 0 0;font-weight:700">Đừng quay lại ăn như cũ ngay. 3–4 tuần tới, mỗi tuần thêm ~150–200 kcal, chủ yếu bằng cơm (~120–150 g cơm chín), tới khi cân đứng yên. Vẫn cân đồ ăn và cân mỗi sáng.</p></div>`;
   if (done) {
     h += `<div class="card stamp" style="margin-top:14px"><div class="ic-big">${ic('trophy')}</div><div><div class="big">Đã chốt ngày ${I.idx + 1}</div><div style="font-weight:700">Thịt và xu đã vào túi. Mai chiến tiếp.</div></div></div>`;
@@ -479,32 +511,52 @@ function viewCal(D) {
   </div>`;
 }
 
-/* ----- Pet: trại chung, bộ sưu tập, cửa hàng ----- */
+/* ----- Pet: ổ trứng, trại chung, bộ sưu tập, cửa hàng ----- */
+const RAR_GLOW = ['#e8eef8', '#38b6ff', '#b46bff', '#ffc21f'];
+function nestHTML(D) {
+  const n = D.nest, left = NPETS - D.pets;
+  if (n > 0) {
+    const show = Math.min(3, n);
+    return `<div class="card nestcard ready"><button class="nest-eggs" data-act="hatch-open" aria-label="Nở trứng">${Array.from({ length: show }, (_, i) => `<span class="ne" style="animation-delay:-${i * .45}s">${eggSVG()}</span>`).join('')}${n > show ? `<b class="ne-more">+${n - show}</b>` : ''}</button>
+      <div class="nest-t"><div class="h3" style="margin:0">Ổ trứng: ${n} trứng chờ nở</div><div class="sub">Mỗi trứng nở ra 1 pet ngẫu nhiên trong ${left} con chưa có. Độ hiếm chỉ lộ ra khi nở.</div>
+      <button class="btn block nest-go" data-act="hatch-open">${ic('egg', 'i-btn')} NỞ TRỨNG</button></div></div>`;
+  }
+  if (!left) return `<div class="card nestcard done"><div class="nest-eggs">${ic('trophy')}</div><div class="nest-t"><div class="h3" style="margin:0">Đã nở đủ ${NPETS} pet!</div><div class="sub">Cả trại đã về đủ. Nuôi cả đội lên dạng 4 thôi.</div></div></div>`;
+  const at = nextEggAt(D.total), need = at - D.total;
+  return `<div class="card nestcard"><div class="nest-eggs dim"><span class="ne">${eggSVG()}</span></div><div class="nest-t"><div class="h3" style="margin:0">Trứng tiếp theo</div>
+    <div class="sub">${D.total ? `Chốt thêm <b>${need}</b> ngày nữa là nhận trứng (tổng ${at} ngày).` : 'Chốt ngày đầu tiên để nhận quả trứng đầu tiên.'} Cứ 2 ngày chốt được 1 trứng, còn ${left} pet chưa nở.</div></div></div>`;
+}
 function viewPets(D) {
   const ne = epicOwnedN(), spin = hasSpin(D);
-  let h = `<section class="hero"><div><div class="daynum tout" style="font-size:38px">Trại pet</div><div class="date">${D.pets}/28 pet · ${ne}/${EPICS.length} Sử thi · cứ 3 ngày chốt mở thêm một con</div></div></section>
-  <div class="seg three" role="tablist"><button role="tab" data-act="pview" data-v="camp" aria-selected="${ui.petView === 'camp'}">${ic('paw', 'i-btn')} Trại</button><button role="tab" data-act="pview" data-v="gacha" aria-selected="${ui.petView === 'gacha'}">${ic('wheel', 'i-btn')} Vòng quay${spin ? '<span class="seg-dot"></span>' : ''}</button><button role="tab" data-act="pview" data-v="shop" aria-selected="${ui.petView === 'shop'}">${ic('bag', 'i-btn')} Cửa hàng</button></div>`;
+  let h = `<section class="hero"><div><div class="daynum tout" style="font-size:38px">Trại pet</div><div class="date">${D.pets}/${NPETS} pet · ${ne}/${EPICS.length} Sử thi · cứ 2 ngày chốt nhận 1 trứng</div></div></section>
+  <div class="seg three" role="tablist"><button role="tab" data-act="pview" data-v="camp" aria-selected="${ui.petView === 'camp'}">${ic('paw', 'i-btn')} Trại${D.nest ? '<span class="seg-dot"></span>' : ''}</button><button role="tab" data-act="pview" data-v="gacha" aria-selected="${ui.petView === 'gacha'}">${ic('wheel', 'i-btn')} Vòng quay${spin ? '<span class="seg-dot"></span>' : ''}</button><button role="tab" data-act="pview" data-v="shop" aria-selected="${ui.petView === 'shop'}">${ic('bag', 'i-btn')} Cửa hàng</button></div>`;
   if (ui.petView === 'shop') return h + viewShop(D);
   if (ui.petView === 'gacha') return h + viewGacha(D);
-  h += `<div class="card scene">${campSVG(D)}<div class="scene-hud"><span class="chip">${ic('meat', 'e')}${state.food}</span><span class="chip">${ic('coin', 'e')}${state.coins}</span></div></div>
-    <p class="sub" style="margin:8px 2px 0;text-align:center">${D.total ? 'Chạm vào pet trong trại để xem, cho ăn, thay đồ' : 'Chốt ngày đầu tiên để nở trứng'}</p>`;
+  h += nestHTML(D);
+  h += `<div class="card scene camp-card">${campHTML(D)}<div class="scene-hud"><span class="chip">${ic('meat', 'e')}${state.food}</span><span class="chip">${ic('coin', 'e')}${state.coins}</span></div></div>
+    ${campNavHTML()}
+    <p class="sub" style="margin:6px 2px 0;text-align:center">${D.pets || ne ? 'Vuốt ngang xem 7 khu · chạm pet để chăm' : 'Vuốt ngang xem 7 khu của trại'}</p>`;
   if (spin) h += `<div class="card banner gx-banner" style="margin-top:12px"><p>Có lượt quay Sử thi đang chờ.</p><button class="btn sm" data-act="pview" data-v="gacha">${ic('wheel', 'i-btn')} Quay</button></div>`;
-  const next = PETS.find(p => !state.pets[p.id]);
-  if (next) h += `<div class="card nextpet"><div class="np-sil">${petSVG(next.id, 1, { sil: true })}</div><div><div class="h3" style="margin:0">Pet tiếp theo</div><div class="sub">${ELEMENTS[next.el].n} · ${RARITY[next.rar].n} · mở khi chốt đủ <b>${next.need}</b> ngày (còn ${next.need - D.total})</div></div></div>`;
   const card = p => {
     const st = state.pets[p.id], E = ELEMENTS[p.el], R = RARITY[p.rar];
+    if (!st && !p.epic) return `<button class="pcard locked q" data-act="pet" data-id="${p.id}" style="--e1:${E.bg[0]};--e2:${E.bg[1]}" aria-label="Pet hệ ${E.n} chưa nở">
+      <span class="pc-art"><span class="qmark tout">?</span></span><span class="pn">???</span><span class="pmeta"><span class="rar hid">?</span></span><span class="sub" style="font-size:12px">${E.n}</span></button>`;
     return `<button class="pcard ${st ? 'f' + st.f : 'locked'}${p.epic ? ' epic' : ''}" data-act="pet" data-id="${p.id}" style="--e1:${E.bg[0]};--e2:${E.bg[1]}" aria-label="${st ? esc(p.name) : 'Pet chưa mở'}">
       ${st && !state.seen[p.id] ? '<span class="new">Mới</span>' : ''}
       <span class="pc-art" data-lazy="${p.id}|${st ? st.f : 1}|${st ? 0 : 1}"></span>
-      ${st ? '' : `<span class="need">${p.epic ? 'Vòng quay' : `Ngày ${p.need}`}</span>`}
+      ${st ? '' : `<span class="need">Vòng quay</span>`}
       <span class="pn">${st ? esc(p.name) : '???'}</span>
       <span class="pmeta"><span class="rar${R.epic ? ' epic-tag' : ''}" style="background:${R.c}">${R.n}</span></span>
       ${st ? `<span class="pips" aria-label="Dạng ${st.f}">${[1, 2, 3, 4].map(f => `<i class="${f <= st.f ? 'on' : ''}"></i>`).join('')}</span>` : `<span class="sub" style="font-size:12px">${ELEMENTS[p.el].n}</span>`}
     </button>`;
   };
   h += `<h3 class="h2 tout" style="margin:20px 2px 10px">Sử thi <span class="sub" style="text-shadow:none">${ne}/${EPICS.length} · chỉ có từ vòng quay</span></h3><div class="pet-grid epic-grid">${EPICS.map(card).join('')}</div>`;
-  h += `<h3 class="h2 tout" style="margin:20px 2px 10px">Bộ sưu tập <span class="sub" style="text-shadow:none">${D.pets}/28</span></h3><div class="pet-grid">${PETS.map(card).join('')}</div>`;
-  return h;
+  h += `<h3 class="h2 tout" style="margin:20px 2px 4px">Bộ sưu tập <span class="sub" style="text-shadow:none">${D.pets}/${NPETS}</span></h3><p class="sub" style="margin:0 2px 8px">Ô dấu hỏi là pet chưa nở, độ hiếm còn ẩn.</p><div class="pet-grid">`;
+  Object.keys(ELEMENTS).forEach(e => {
+    const L = PETS.filter(p => p.el === e), own = L.filter(p => state.pets[p.id]).length, E = ELEMENTS[e];
+    h += `<div class="pg-head" style="--zc:${E.c}"><i></i>${E.n}<span>${own}/${L.length}</span></div>` + L.map(card).join('');
+  });
+  return h + `</div>`;
 }
 // Dựng SVG pet khi ô hiện ra
 let lazyObs = null;
@@ -558,7 +610,7 @@ function renderPetView(first) {
     <div class="pv-tags"><span class="tag-el" style="background:${E.c}">${E.n}</span>${rarTag(p.rar)}</div>
     <div class="pv-place">${esc(SCENE_NAME[id])}</div></div>
   <div class="pv-body">
-    <div class="pv-name"><h2 class="tout${p.epic ? ' epic-name' : ''}">${esc(p.name)}</h2><span class="pv-form">Dạng ${st.f} · ${FORM_NAME[st.f]}</span></div>
+    <div class="pv-name"><h2 class="tout${p.epic ? ' epic-name' : ''}">${esc(p.name)}</h2><span class="pv-form">Dạng ${st.f} · ${FORM_NAME[st.f]}${!p.epic && st.o != null ? ` · trứng thứ ${st.o + 1}` : ''}</span></div>
     <p class="pv-intro">${esc(p.intro)}</p>
     <div class="ftrack">${[1, 2, 3, 4].map(f => `<div class="ft ${f === st.f ? 'cur' : f < st.f ? 'past' : 'next'}">${petSVG(id, f, { sil: f > st.f })}<span>${f}</span></div>${f < 4 ? `<i class="ft-ar">${ic('arrowR')}</i>` : ''}`).join('')}</div>`;
   if (st.f < 4) {
@@ -590,9 +642,11 @@ function openLockedPet(id) {
       <button class="btn block" data-act="gx-open">${ic('wheel', 'i-btn')} Tới vòng quay</button>`);
     return;
   }
-  openModal(`<h2>Pet bí ẩn</h2><div style="display:flex;justify-content:center"><div style="width:180px">${petSVG(id, 1, { sil: true })}</div></div>
-    <p style="text-align:center;margin:4px 0"><span class="tag-el" style="background:${E.c}">${E.n}</span> ${rarTag(p.rar)}</p>
-    <p style="text-align:center">Mở khi chốt đủ <b>${p.need}</b> ngày. Còn <b>${p.need - D.total}</b> ngày nữa.</p>`);
+  const left = NPETS - D.pets, at = nextEggAt(D.total);
+  openModal(`<h2>Pet bí ẩn</h2><div class="lock-q"><span class="qmark tout">?</span></div>
+    <p style="text-align:center;margin:4px 0"><span class="tag-el" style="background:${E.c}">${E.n}</span> <span class="tag-el rar hid">Độ hiếm: ẩn</span></p>
+    <p style="text-align:center">Pet này nằm trong một quả trứng nào đó. Mỗi trứng nở ra 1 pet ngẫu nhiên trong <b>${left}</b> con chưa có, con càng hiếm thì càng ít khi ra sớm.</p>
+    ${D.nest ? `<button class="btn block" data-act="hatch-open">${ic('egg', 'i-btn')} Nở trứng (${D.nest} quả trong ổ)</button>` : `<p class="sub" style="text-align:center">${at ? (D.total ? `Trứng tiếp theo: chốt thêm ${at - D.total} ngày.` : 'Chốt ngày đầu tiên để nhận trứng.') : ''}</p>`}`);
 }
 
 /* ----- Cân ----- */
@@ -753,12 +807,11 @@ function commitDay() {
     if (b && !state.bonus[key]) { state.bonus[key] = 1; state.food += b.meat; state.coins += b.coin; rewards.push(`Chuỗi ${log.streak}: ${rwHTML(b.meat, b.coin)}`); }
     if (log.comeback && !state.bonus['cb:' + ds]) { state.bonus['cb:' + ds] = 1; state.food += ECON.comeback.meat; state.coins += ECON.comeback.coin; rewards.push(`Quay lại: ${rwHTML(ECON.comeback.meat, ECON.comeback.coin)}`); }
   }
-  const newPets = syncPets(after);
   const nb = checkAch(after);
   persist();
   const wasBack = ui.back; ui.back = false;
   render();
-  celebrate({ dayNum: diff(state.startDate, ds) + 1, back: wasBack, streak: after.streak, rewards, newPets, badges: nb, first: before.total === 0, spin: spinStatus(ds).ok, spinLeft: spinStatus(ds).left.length });
+  celebrate({ dayNum: diff(state.startDate, ds) + 1, back: wasBack, streak: after.streak, rewards, newEggs: Math.max(0, after.eggs - before.eggs), nest: after.nest, badges: nb, first: before.total === 0, spin: spinStatus(ds).ok, spinLeft: spinStatus(ds).left.length });
 }
 function feedPet(id, n) {
   const p = PET_BY[id], st = state.pets[id]; if (!st || st.f >= 4 || state.food < 1) return;
@@ -941,27 +994,97 @@ function openDay(ds) {
 /* ----- Ăn mừng chốt ngày ----- */
 function celebrate(o) {
   const c = document.createElement('div'); c.className = 'cele'; c.id = 'cele';
-  const np = o.newPets[o.newPets.length - 1];
-  const lp = !np ? curPetId() : null;
+  const eggs = o.newEggs > 0, lp = !eggs && !o.nest ? curPetId() : null;
   c.innerHTML = `<div class="rays"></div>
     <h2 class="tout">${o.back ? 'Đã chốt bù' : 'Đã chốt'} ngày ${o.dayNum}!</h2>
     <div class="cs tout-s">${o.streak ? `${ic('fire', 'i-in')} Chuỗi ${o.streak} ngày` : ''}</div>
     <div class="rew">${o.rewards.map((r, i) => `<span style="animation-delay:${.15 + i * .12}s">${r}</span>`).join('')}</div>
-    ${np ? `<div class="newpet ${o.first ? 'hatch' : 'popin'}" id="np">${o.first ? eggSVG() : petSVG(np.id, 1)}</div><div class="np-name tout" id="npn">${o.first ? 'Trứng đang nứt…' : `Pet mới: ${esc(np.name)}!`}</div><div class="sub" style="color:#fff">${o.first ? '' : `<span class="tag-el" style="background:${ELEMENTS[np.el].c}">${ELEMENTS[np.el].n}</span> <span class="tag-el" style="background:${RARITY[np.rar].c}">${RARITY[np.rar].n}</span> · quà nở ${M_(hatchGift(np.i))}`}</div>` : ''}
+    ${eggs || o.nest ? `<div class="newpet hatch" id="np">${eggSVG()}</div><div class="np-name tout">${eggs ? (o.first ? 'Quả trứng đầu tiên!' : 'Nhận 1 trứng mới!') : 'Trứng vẫn chờ trong ổ'}</div><div class="sub" style="color:#fff">Ổ trứng: ${o.nest} quả · nở ra pet ngẫu nhiên</div>` : ''}
     ${lp ? `<div class="newpet popin" style="width:150px">${petSVG(lp, state.pets[lp].f, { eq: state.pets[lp].eq })}</div><div class="cs tout-s">${esc(PET_BY[lp].name)} đang chờ được cho ăn</div>` : ''}
     ${Q_STREAK[o.streak] ? `<div class="bubble" style="max-width:320px">${esc(Q_STREAK[o.streak])}</div>` : ''}
     ${o.badges.length ? `<div class="rew small">${o.badges.map(a => `<span>${ic(ACH_GLYPH[a.kind] || 'star', 'i-in')} ${esc(a.name)}</span>`).join('')}</div>` : ''}
+    ${o.nest ? `<button class="btn green" data-act="cele-hatch">${ic('egg', 'i-btn')} Nở trứng ngay</button>` : ''}
     ${o.spin ? `<button class="btn gx-go" data-act="cele-spin">${ic('wheel', 'i-btn')} Quay thưởng ngay</button>` : o.spinLeft ? `<div class="sub" style="color:#fff">Tích nốt ${o.spinLeft} mục phụ là mở lượt quay Sử thi.</div>` : ''}
-    <button class="btn ${o.spin ? 'ghost' : ''}" data-act="cele-close">${np ? 'Xem pet' : 'Ngon!'}</button>`;
+    <button class="btn ${o.spin || o.nest ? 'ghost' : ''}" data-act="cele-close">${o.nest ? 'Để sau' : 'Ngon!'}</button>`;
   document.body.appendChild(c); flushCel();
   c.querySelector('.btn').focus({ preventScroll: true });
   buzz([30, 50, 90]); fx.burst(160);
-  if (np && o.first) setTimeout(() => {
-    const e = $('#np'), n = $('#npn'); if (!e) return;
-    e.className = 'newpet popin'; e.innerHTML = petSVG(np.id, 1); flushCel();
-    n.textContent = `Nở rồi: ${np.name}!`; fx.burst(90); buzz([20, 30, 60]);
-  }, reduced() ? 50 : 1400);
-  c.dataset.goPet = np ? np.id : '';
+}
+
+/* ----- Màn nở trứng: gõ 3 lần → trứng rung, nứt, lóe sáng theo màu độ hiếm → lộ pet ----- */
+const HX_ZIG = 'M48,124 L60,112 L72,126 L86,108 L98,126 L112,108 L124,126 L138,110 L152,124';
+const hxBody = () => pa('M100,40 C140,40 156,110 152,140 C148,174 126,188 100,188 C74,188 52,174 48,140 C44,110 60,40 100,40 Z', 'url(#gEgg)', 5.5) +
+  el(80, 96, 11, 8, '#ff8a1f', 0) + el(120, 136, 14, 10, '#ff8a1f', 0) + el(90, 160, 9, 6, '#ff8a1f', 0) + el(125, 86, 6, 5, '#ff8a1f', 0) + el(66, 140, 6, 8, '#ff8a1f', 0) + hl(80, 64, 12, 6);
+function hatchEggSVG() {
+  const crack = (d, cls) => `<g class="hx-cr ${cls}">${ln(d, OL, 6.5)}${ln(d, '#fff', 2.8, 'class="hx-glow"')}</g>`;
+  return `<svg class="hx-svg" viewBox="0 0 200 200" overflow="visible" aria-hidden="true"><ellipse cx="100" cy="189" rx="46" ry="8" fill="#000" opacity=".3"/><g class="hx-shell">${hxBody()}` +
+    crack('M122,56 L112,72 L124,80 L114,98', 'c1') + crack('M76,66 L86,82 L74,92 L84,108 M114,98 L104,110', 'c2') + crack(HX_ZIG, 'c3') + `</g></svg>`;
+}
+function hatchShells() {
+  const cut = 'L152,124 L138,110 L124,126 L112,108 L98,126 L86,108 L72,126 L60,112 L48,124';
+  const half = (cls, clip) => `<g class="${cls}"><g clip-path="url(#${clip})">${hxBody()}${ln(HX_ZIG, OL, 5)}</g></g>`;
+  return `<svg class="hx-shells" viewBox="0 0 200 200" overflow="visible" aria-hidden="true"><defs><clipPath id="hxTopC"><path d="M0,-20 H200 V124 ${cut} L0,124 Z"/></clipPath><clipPath id="hxBotC"><path d="M0,220 H200 V124 ${cut} L0,124 Z"/></clipPath></defs>${half('hx-top-shell', 'hxTopC')}${half('hx-bot-shell', 'hxBotC')}</svg>`;
+}
+let hx = null;
+function openHatch() {
+  const D = derive();
+  if (D.nest < 1) { toast(D.pets >= NPETS ? 'Đã nở đủ pet rồi' : 'Ổ trứng đang trống. Chốt ngày để nhận trứng'); return; }
+  closeModal(); const old = $('#cele'); if (old) old.remove(); closeHatch(true);
+  hx = { taps: 0, res: null, busy: false };
+  const c = document.createElement('div'); c.className = 'hatchx'; c.id = 'hatchx';
+  c.innerHTML = `<div class="hx-rays"></div><div class="hx-flash"></div>
+    <div class="hx-top"><div class="hx-count">Ổ trứng · ${D.nest} quả</div><h2 class="tout" id="hx-title">Chạm để gõ trứng</h2></div>
+    <div class="hx-stage"><button class="hx-egg" id="hx-egg" data-act="hx-tap" aria-label="Gõ trứng">${hatchEggSVG()}</button></div>
+    <div class="hx-dots" id="hx-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="hx-res" id="hx-res"></div>
+    <div class="hx-btns" id="hx-btns"><button class="btn ghost" data-act="hx-close">Để sau</button></div>`;
+  document.body.appendChild(c); flushCel();
+  const e = $('#hx-egg'); if (e) e.focus({ preventScroll: true });
+}
+function hatchTap() {
+  if (!hx || hx.busy || hx.taps >= 3) return;
+  if (!hx.res) {
+    const r = hatchEgg();
+    if (!r) { closeHatch(); render(); toast('Ổ trứng đang trống'); return; }
+    hx.res = r; renderTop(derive()); renderNav();
+  }
+  hx.taps++;
+  const c = $('#hatchx'), egg = $('#hx-egg'); if (!c || !egg) return;
+  c.style.setProperty('--rc', RAR_GLOW[hx.res.p.rar]);
+  c.classList.add('t' + hx.taps);
+  egg.classList.remove('k1', 'k2', 'k3'); void egg.offsetWidth; egg.classList.add('k' + hx.taps);
+  [...$('#hx-dots').children].forEach((d, i) => d.classList.toggle('on', i < hx.taps));
+  $('#hx-title').textContent = hx.taps === 1 ? 'Nứt rồi! Gõ tiếp' : hx.taps === 2 ? 'Có gì đó đang động đậy…' : 'Sắp nở!';
+  buzz(hx.taps === 3 ? [30, 40, 30, 40, 60] : 18 + hx.taps * 8);
+  if (hx.taps === 3) { hx.busy = true; setTimeout(revealHatch, reduced() ? 60 : 1150); }
+}
+function revealHatch() {
+  const c = $('#hatchx'); if (!c || !hx || !hx.res) return;
+  const r = hx.res, p = r.p, E = ELEMENTS[p.el], st = state.pets[p.id], cost1 = costOf(p.id, 1);
+  c.style.setProperty('--e1', E.bg[0]); c.style.setProperty('--e2', E.bg[1]);
+  c.classList.add('shown', 'r' + p.rar);
+  $('.hx-top', c).innerHTML = `<div class="hx-rar r${p.rar}">${RARITY[p.rar].n.toUpperCase()}</div>`;
+  $('.hx-stage', c).innerHTML = `<div class="hx-pet popin">${petSVG(p.id, 1)}</div>${reduced() ? '' : hatchShells()}`;
+  $('#hx-dots').remove();
+  const giftTxt = r.rest > 0 ? `Quà nở ${M_(r.g)}: nạp sẵn ${r.bar} cho ${esc(p.name)}, ${r.rest} vào kho` : `Quà nở ${M_(r.g)} nạp sẵn: ${st ? st.m : r.bar}/${cost1} tới dạng 2`;
+  $('#hx-res').innerHTML = `<div class="hx-name tout">${esc(p.name)}</div>
+    <div class="hx-tags"><span class="tag-el" style="background:${E.c}">${E.n}</span>${rarTag(p.rar)}<span class="tag-el" style="background:#fff">Trứng thứ ${r.o + 1}/${NPETS}</span></div>
+    <div class="hx-intro">${esc(p.intro)}</div><div class="hx-gift">${giftTxt}</div>
+    ${r.nb.length ? `<div class="hx-ach">${r.nb.map(a => `<span>${ic(ACH_GLYPH[a.kind] || 'star', 'i-in')} ${esc(a.name)} · ${rwHTML(ECON.tier[a.t].meat, ECON.tier[a.t].coin)}</span>`).join('')}</div>` : ''}`;
+  $('#hx-btns').innerHTML = (r.left > 0 ? `<button class="btn green" data-act="hx-next">${ic('egg', 'i-btn')} Nở tiếp (còn ${r.left})</button>` : '') +
+    `<button class="btn" data-act="hx-see" data-id="${p.id}">Xem ${esc(p.name)}</button><button class="btn ghost" data-act="hx-close">Xong</button>`;
+  flushCel();
+  const R = reduced();
+  if (p.rar === 3 && !R) { document.body.classList.add('shake'); setTimeout(() => document.body.classList.remove('shake'), 900); }
+  buzz(p.rar >= 2 ? [40, 30, 90, 30, 160] : [30, 50, 90]);
+  fx.burst([70, 110, 160, 230][p.rar]); if (p.rar === 3 && !R) setTimeout(() => fx.burst(160), 650);
+  setTimeout(() => { const b = $('#hx-btns .btn'); if (b) b.focus({ preventScroll: true }); }, R ? 40 : 700);
+  hx.busy = false;
+}
+function closeHatch(silent) {
+  const c = $('#hatchx'); if (c) c.remove();
+  const had = hx && hx.res; hx = null;
+  if (!silent && had) render();
 }
 
 /* ----- Hiệu ứng ----- */
@@ -1001,7 +1124,7 @@ const fx = {
 /* ===================== SỰ KIỆN ===================== */
 function go(tab) {
   if (!TABS.includes(tab)) tab = 'today';
-  ui.tab = tab; closeModal(); closeGacha(); if (ui.pet) { const el = $('#petview'); if (el) el.remove(); ui.pet = null; }
+  ui.tab = tab; closeModal(); closeGacha(); if ($('#hatchx') && !(hx && hx.busy)) closeHatch(true); if (ui.pet) { const el = $('#petview'); if (el) el.remove(); ui.pet = null; }
   try { if (location.hash !== '#' + tab) history.replaceState(null, '', '#' + tab); } catch (e) { }
   render(); window.scrollTo(0, 0);
 }
@@ -1026,7 +1149,14 @@ document.addEventListener('click', e => {
     case 'exzoom': openEx(b.dataset.id, b.dataset.sr, b.dataset.rest); break;
     case 'settings': openSettings(); break;
     case 'close': closeModal(); break;
-    case 'cele-close': { const c = $('#cele'), id = c && c.dataset.goPet; if (c) c.remove(); if (id) { go('pets'); openPet(id); } break; }
+    case 'cele-close': { const c = $('#cele'); if (c) c.remove(); break; }
+    case 'cele-hatch': { const c = $('#cele'); if (c) c.remove(); ui.petView = 'camp'; go('pets'); openHatch(); break; }
+    case 'hatch-open': closeModal(); if (ui.tab !== 'pets' || ui.petView !== 'camp') { ui.petView = 'camp'; go('pets'); } openHatch(); break;
+    case 'hx-tap': hatchTap(); break;
+    case 'hx-next': closeHatch(true); render(); openHatch(); break;
+    case 'hx-close': closeHatch(); break;
+    case 'hx-see': { const id = b.dataset.id; closeHatch(true); ui.petView = 'camp'; go('pets'); openPet(id); break; }
+    case 'camp-go': campGo(b.dataset.z); break;
     case 'cele-spin': { const c = $('#cele'); if (c) c.remove(); ui.petView = 'gacha'; go('pets'); break; }
     case 'gx-open': closeModal(); ui.petView = 'gacha'; go('pets'); break;
     case 'spin': runSpin(b.dataset.date); break;
@@ -1089,14 +1219,15 @@ document.addEventListener('change', e => {
   else { const r = new FileReader(); r.onload = () => done(String(r.result || '')); r.onerror = () => toast('Không đọc được file'); r.readAsText(file); }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { if ($('#gres') || $('#epic-rev')) { closeGacha(); render(); } else if ($('#modal')) closeModal(); else if ($('#evo')) { $('#evo').remove(); render(); } else if (ui.pet) closePet(); const c = $('#cele'); if (c) c.remove(); }
+  if (e.key === 'Escape') { if ($('#hatchx')) { if (!(hx && hx.busy)) closeHatch(); return; } if ($('#gres') || $('#epic-rev')) { closeGacha(); render(); } else if ($('#modal')) closeModal(); else if ($('#evo')) { $('#evo').remove(); render(); } else if (ui.pet) closePet(); const c = $('#cele'); if (c) c.remove(); }
   if (e.key === 'Enter' && e.target && e.target.dataset && e.target.dataset.wdate) { e.preventDefault(); saveWeight(e.target.dataset.wdate, e.target.id); }
-  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('scene-pet')) { e.preventDefault(); const id = e.target.dataset.pet; if (id !== 'egg') openPet(id); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('scene-pet')) { e.preventDefault(); const id = e.target.dataset.pet; if (id === 'nest') openHatch(); else if (id !== 'egg') openPet(id); }
 });
 document.addEventListener('click', e => {
   const g = e.target.closest && e.target.closest('.scene-pet'); if (!g) return;
   const id = g.dataset.pet;
-  if (id === 'egg') { toast('Chốt ngày đầu tiên để nở trứng'); return; }
+  if (id === 'egg') { toast('Chốt ngày đầu tiên để nhận trứng'); return; }
+  if (id === 'nest') { openHatch(); return; }
   openPet(id);
 });
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== ui.tab) { ui.tab = t; render(); window.scrollTo(0, 0); } });
@@ -1108,6 +1239,6 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && to
 document.getElementById('defs').innerHTML = `<svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false"><defs>${baseDefs()}</defs></svg><svg id="celdefs" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false"></svg>`;
 loadLocal();
 { const t = location.hash.slice(1); if (TABS.includes(t)) ui.tab = t; }
-{ const D = derive(); const fresh = syncPets(D); const nb = checkAch(D); if (MIGRATED) persist(); else if (fresh.length || nb.length) saveLocal(); }
+{ const D = derive(); const nb = checkAch(D); if (MIGRATED) persist(); else if (nb.length) saveLocal(); if (MIGRATED && D.nest > 0) setTimeout(() => toast(`${ic('egg', 'i-in')} Bản mới: ${D.nest} trứng đang chờ nở ở tab Pet`, 4200), 900); }
 render();
 store.init();
